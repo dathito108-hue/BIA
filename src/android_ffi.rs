@@ -72,7 +72,7 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeImmediateToken(
     let token = runtime()
         .lock()
         .ok()
-        .and_then(|app| app.immediate_tokens(&input).into_iter().next())
+        .and_then(|mut app| app.immediate_tokens(&input).into_iter().next())
         .map(|t| t.text)
         .unwrap_or_default();
     java_string(&mut env, token)

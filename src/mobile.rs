@@ -180,12 +180,12 @@ impl OfflineMobileBia {
         count
     }
 
-    pub fn immediate_tokens(&self, input: &str) -> Vec<InstantToken> {
+    pub fn immediate_tokens(&mut self, input: &str) -> Vec<InstantToken> {
         self.tokens.emit_immediate(input)
     }
 
     pub fn response_tokens(
-        &self,
+        &mut self,
         input: &str,
         moment: &CognitiveMoment,
         response: &str,

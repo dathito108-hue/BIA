@@ -11,6 +11,7 @@ pub mod continuity;
 pub mod core;
 pub mod dialogue;
 pub mod curriculum;
+pub mod four_matrix;
 pub mod goals;
 pub mod inference_matrix;
 pub mod knowledge;
@@ -35,6 +36,10 @@ pub use capability::{action_for_goal, encode_action, infer_device_action, Device
 pub use continuity::{decode_continuity, encode_continuity, ContinuityState};
 pub use core::{BiaDca, BiaDcaConfig};
 pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
+pub use four_matrix::{
+    classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
+    FourMatrixOutput, PerspectiveProjection, RealmBand, AGGREGATES,
+};
 pub use goals::{Goal, GoalStack, GoalStatus};
 pub use curriculum::{score as score_curriculum, CurriculumDomain, CurriculumScore, TrialResult};
 pub use inference_matrix::{f32_to_q15, q15_to_f32, MatrixDecision, MatrixLevel, MatrixSignal, TamThienMatrix, LANES};
@@ -567,7 +572,7 @@ mod tests {
 
     #[test]
     fn instant_token_path_is_bounded_for_long_input() {
-        let emitter = InstantTokenEmitter::default();
+        let mut emitter = InstantTokenEmitter::default();
         let long = "abc ".repeat(10_000);
         let signals = emitter.signals_from_text(&long);
         assert!(signals.len() <= LANES);
@@ -577,7 +582,7 @@ mod tests {
 
     #[test]
     fn core_fast_matrix_runs_without_world_scan() {
-        let bia = BiaDca::new(BiaDcaConfig::default());
+        let mut bia = BiaDca::new(BiaDcaConfig::default());
         let focus = Phenomenon::new(
             1,
             WorldLevel::TieuThien,
@@ -590,6 +595,51 @@ mod tests {
         );
         let decision = bia.fast_matrix(&focus);
         assert!(decision.winner < LANES as u8);
+    }
+
+    #[test]
+    fn four_matrix_realm_mask_suppresses_unneeded_form_channel() {
+        let input = encode_text_aggregates("logic suy luận trừu tượng");
+        let mut kernel = FourMatrixKernel::default();
+        let abstract_out = kernel.process(input, RealmBand::Abstract);
+        let mut embodied_kernel = FourMatrixKernel::default();
+        let embodied_out = embodied_kernel.process(input, RealmBand::Embodied);
+        assert!(abstract_out.masked.rupa < embodied_out.masked.rupa);
+    }
+
+    #[test]
+    fn dependent_origin_state_changes_incrementally() {
+        let mut kernel = FourMatrixKernel::default();
+        let input = AggregateVector {
+            rupa: 12000,
+            vedana: 8000,
+            sanna: 24000,
+            sankhara: 16000,
+            vinnana: 26000,
+        };
+        let first = kernel.process(input, RealmBand::Mixed);
+        let second = kernel.process(input, RealmBand::Mixed);
+        assert_ne!(first.conditioned, second.conditioned);
+        assert_eq!(kernel.state(), second.conditioned);
+    }
+
+    #[test]
+    fn zero_state_is_scratch_only_not_seed_memory() {
+        let mut bia = BiaDca::new(BiaDcaConfig::default());
+        let p = Phenomenon::new(
+            999,
+            WorldLevel::TieuThien,
+            SenseGate::Mind,
+            9,
+            vec![0.8, 0.3],
+            0.9,
+            0.7,
+            1,
+        );
+        bia.experience(&p, 77, 0.9, 0.0);
+        let before = bia.memory.len();
+        let _ = bia.fast_matrix(&p);
+        assert_eq!(bia.memory.len(), before);
     }
 
 }
