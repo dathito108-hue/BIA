@@ -46,7 +46,7 @@ jobs:
           gradle-version: "8.10.2"
 
       - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+        run: gradle :app:assembleDebug :app:assembleDebugAndroidTest --stacktrace
 
       - name: Verify APK
         run: |

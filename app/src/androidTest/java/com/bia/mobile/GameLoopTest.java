@@ -56,7 +56,7 @@ public final class GameLoopTest extends InstrumentationTestCase {
     boolean clickNode(AccessibilityNodeInfo node,String text,int depth){
         if(node==null || depth>16)return false;
         if(node.getText()!=null && node.getText().toString().equalsIgnoreCase(text) && node.isEnabled()){
-            if(!node.isVisibleToUser()){node.performAction(AccessibilityNodeInfo.ACTION_SHOW_ON_SCREEN);return false;}
+            if(!node.isVisibleToUser()){node.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SHOW_ON_SCREEN.getId());return false;}
             AccessibilityNodeInfo p=node;while(p!=null && !p.isClickable())p=p.getParent();
             if(p!=null && p.performAction(AccessibilityNodeInfo.ACTION_CLICK))return true;
         }

@@ -29,6 +29,8 @@ public final class GameTrainingActivity extends Activity {
             circle(c,enemyX,enemyY,.024f,0xffff3030);circle(c,.5f,.5f,.009f,Color.WHITE);
             circle(c,.14f,.79f,.055f,0xff507080);circle(c,.88f,.8f,.04f,0xff40b0a0);circle(c,.74f,.8f,.035f,0xff8070d0);
             paint.setTextSize(18);paint.setColor(Color.WHITE);c.drawText("DI CHUYỂN",getWidth()*.06f,getHeight()*.91f,paint);c.drawText("CHIÊU      ĐÁNH",getWidth()*.69f,getHeight()*.91f,paint);
+            c.drawText("Nhịp ảnh "+(android.os.SystemClock.elapsedRealtime()/100),15,getHeight()*.98f,paint);
+            postInvalidateDelayed(80);
         }
         void circle(Canvas c,float x,float y,float radius,int color){paint.setColor(color);c.drawCircle(x*getWidth(),y*getHeight(),radius*Math.min(getWidth(),getHeight()),paint);}
         @Override public boolean onTouchEvent(MotionEvent e){
