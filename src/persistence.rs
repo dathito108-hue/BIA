@@ -1,3 +1,7 @@
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
+
 use crate::memory::{Seed, SeedMemory};
 use crate::types::{Phenomenon, Relation, RelationKind, SenseGate, WorldLevel};
 use crate::world::WorldGraph;
@@ -294,4 +298,34 @@ fn u8_to_relation_kind(x: u8) -> Result<RelationKind, PersistenceError> {
         6 => Ok(RelationKind::GoalRelevant),
         _ => Err(PersistenceError::InvalidEnum),
     }
+}
+
+
+pub fn write_atomic(path: &Path, snapshot: &DharmaSnapshot) -> io::Result<()> {
+    let bytes = encode(snapshot);
+    let temp = temporary_path(path);
+    {
+        let mut file = fs::File::create(&temp)?;
+        use std::io::Write;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+    }
+    fs::rename(&temp, path)?;
+    if let Some(parent) = path.parent() {
+        if let Ok(dir) = fs::File::open(parent) {
+            let _ = dir.sync_all();
+        }
+    }
+    Ok(())
+}
+
+pub fn read_file(path: &Path) -> Result<DharmaSnapshot, PersistenceError> {
+    let bytes = fs::read(path).map_err(|_| PersistenceError::Truncated)?;
+    decode(&bytes)
+}
+
+fn temporary_path(path: &Path) -> PathBuf {
+    let mut temp = path.as_os_str().to_owned();
+    temp.push(".tmp");
+    PathBuf::from(temp)
 }
