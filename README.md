@@ -76,3 +76,17 @@ The Android shell now recognizes a small, explicit set of useful capabilities wh
 - `Sao chép ...` — propose writing text to the clipboard.
 
 Every device action is surfaced to the Android UI for explicit confirmation. Success/failure is sent back into BIA and becomes experiential feedback.
+
+
+## Capability V4–V5
+
+The mobile runtime now adds faster practical continuity and voice interaction:
+
+- Vietnamese speech input through Android's speech recognition intent.
+- Vietnamese TTS output through the device TTS service.
+- Real battery and thermal state feeding the BIA Middle-Way compute budget.
+- A bounded multi-step action queue.
+- Runtime continuity for active goals and pending actions across app restarts.
+- `Tiếp tục` can derive the next action from an active research/search goal.
+- Every queued external action still requires a separate user confirmation.
+- Action success/failure continues to become experiential memory.
