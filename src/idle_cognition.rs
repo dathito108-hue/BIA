@@ -32,7 +32,7 @@ impl IdleCognitionScheduler {
 
         if unresolved_questions > 0 {
             IdleCognitiveTask::ReevaluateHypotheses
-        } else if self.ticks % 3 == 0 {
+        } else if self.ticks.is_multiple_of(3) {
             IdleCognitiveTask::RehearseAnchors
         } else {
             IdleCognitiveTask::ConsolidateMemory
