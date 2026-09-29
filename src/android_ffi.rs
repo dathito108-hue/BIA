@@ -798,3 +798,74 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeRevokeApproval(
         app.revoke_execution_approval();
     }
 }
+
+static GAME_AGENT: OnceLock<Mutex<crate::game_agent::GameAgent>> = OnceLock::new();
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_GameNative_reset(_env: JNIEnv, _class: JClass) {
+    if let Ok(mut agent) = GAME_AGENT.get_or_init(Default::default).lock() {
+        agent.reset();
+    }
+}
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_GameNative_observe(
+    env: JNIEnv,
+    _class: JClass,
+    pixels: jni::objects::JIntArray,
+    width: jint,
+    height: jint,
+    params: jni::objects::JFloatArray,
+    timestamp: jlong,
+) -> jni::sys::jfloatArray {
+    let mut output = [0.0f32; 9];
+    let count = if (8..=512).contains(&width) && (8..=512).contains(&height) {
+        (width * height) as usize
+    } else {
+        0
+    };
+    let mut p = [0.0f32; 9];
+    if count > 0
+        && env.get_array_length(&pixels).ok() == Some(count as i32)
+        && env.get_array_length(&params).ok() == Some(9)
+        && env.get_float_array_region(&params, 0, &mut p).is_ok()
+    {
+        let mut data = vec![0i32; count];
+        if env.get_int_array_region(&pixels, 0, &mut data).is_ok()
+            && p.iter().all(|x| x.is_finite())
+        {
+            let profile = crate::game_agent::GameProfile {
+                roi: [p[0], p[1], p[2], p[3]],
+                rgb: [p[4] as u8, p[5] as u8, p[6] as u8],
+                tolerance: p[7] as u8,
+                moba: p[8] > 0.5,
+            };
+            if let Ok(mut agent) = GAME_AGENT.get_or_init(Default::default).lock() {
+                let data: Vec<u32> = data.into_iter().map(|x| x as u32).collect();
+                let d = agent.observe(
+                    &data,
+                    width as usize,
+                    height as usize,
+                    &profile,
+                    timestamp.max(0) as u64,
+                );
+                if let Some(t) = d.target {
+                    output[0] = t[0];
+                    output[1] = t[1];
+                }
+                output[2] = d.movement[0];
+                output[3] = d.movement[1];
+                output[4] = d.aim[0];
+                output[5] = d.aim[1];
+                output[6] = u8::from(d.fire) as f32;
+                output[7] = u8::from(d.skill) as f32;
+                output[8] = u8::from(d.confirmed) as f32;
+            }
+        }
+    }
+    let Ok(array) = env.new_float_array(9) else {
+        return std::ptr::null_mut();
+    };
+    if env.set_float_array_region(&array, 0, &output).is_err() {
+        return std::ptr::null_mut();
+    }
+    array.into_raw()
+}

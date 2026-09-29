@@ -1617,3 +1617,5 @@ mod tests {
 }
 
 pub mod execution_authority;
+
+pub mod game_agent;
