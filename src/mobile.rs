@@ -1,6 +1,10 @@
 use crate::action::{ActionDecision, ActionProposal, CuTranPolicy};
+use crate::action_queue::ActionQueue;
 use crate::budget::DeviceState;
-use crate::capability::{infer_device_action, DeviceAction, DeviceActionKind};
+use crate::capability::{
+    action_for_goal, infer_device_action, DeviceAction, DeviceActionKind,
+};
+use crate::continuity::{decode_continuity, encode_continuity, ContinuityState};
 use crate::core::BiaDca;
 use crate::dialogue::{DialogueContext, DialogueTurn, Speaker};
 use crate::goals::{GoalStack, GoalStatus};
@@ -20,7 +24,7 @@ pub struct OfflineMobileBia {
     pub policy: CuTranPolicy,
     pub dialogue: DialogueContext,
     pub goals: GoalStack,
-    pending_action: Option<DeviceAction>,
+    queue: ActionQueue,
 }
 
 impl OfflineMobileBia {
@@ -31,7 +35,7 @@ impl OfflineMobileBia {
             policy: CuTranPolicy::default(),
             dialogue: DialogueContext::new(24),
             goals: GoalStack::new(16),
-            pending_action: None,
+            queue: ActionQueue::new(8),
         }
     }
 
@@ -71,8 +75,21 @@ impl OfflineMobileBia {
             }
         }
 
-        let action = infer_device_action(text, stable_id(text, timestamp));
-        self.pending_action = action.clone();
+        let direct = infer_device_action(text, stable_id(text, timestamp));
+        if let Some(action) = direct {
+            self.queue.push(action);
+        } else if is_continue(text) && self.queue.is_empty() {
+            if let Some(goal) = self.goals.active() {
+                if let Some(next) = action_for_goal(
+                    &goal.description,
+                    stable_id(&goal.description, timestamp),
+                ) {
+                    self.queue.push(next);
+                }
+            }
+        }
+
+        let pending = self.queue.front().cloned();
 
         let mut reply = if let Some(lesson) = teaching {
             format!(
@@ -80,9 +97,9 @@ impl OfflineMobileBia {
                 lesson.trim()
             )
         } else if let Some(goal) = self.goals.active() {
-            if text.to_lowercase().contains("mục tiêu") || text.to_lowercase().contains("muc tieu") {
+            if is_goal_command(text) {
                 format!(
-                    "Tôi đã nhận mục tiêu: “{}”. Tôi sẽ giữ nó làm duyên định hướng cho các bước tiếp theo.",
+                    "Tôi đã nhận mục tiêu: “{}”. Tôi sẽ giữ nó làm duyên định hướng và có thể tiếp tục bằng nhiều bước.",
                     goal.description
                 )
             } else {
@@ -92,9 +109,10 @@ impl OfflineMobileBia {
             self.language.respond(text, &moment)
         };
 
-        if let Some(a) = &action {
+        if let Some(a) = &pending {
             reply.push_str(&format!(
-                " Tôi đã tạo hành động “{}”. Ứng dụng sẽ yêu cầu bạn xác nhận trước khi thực thi.",
+                " Hàng đợi hiện có {} hành động; bước kế tiếp là “{}”. Ứng dụng sẽ yêu cầu xác nhận.",
+                self.queue.len(),
                 a.label
             ));
         }
@@ -108,16 +126,16 @@ impl OfflineMobileBia {
         Some(MobileReply {
             text: reply,
             moment,
-            pending_action: action,
+            pending_action: pending,
         })
     }
 
     pub fn pending_action(&self) -> Option<&DeviceAction> {
-        self.pending_action.as_ref()
+        self.queue.front()
     }
 
     pub fn resolve_pending_action(&mut self, success: bool, timestamp: u64) {
-        let Some(action) = self.pending_action.take() else {
+        let Some(action) = self.queue.pop_front() else {
             return;
         };
 
@@ -151,8 +169,34 @@ impl OfflineMobileBia {
                 self.goals.update_active(next, status);
             } else {
                 self.goals.update_active(goal.progress, GoalStatus::Blocked);
+                self.queue.clear();
             }
         }
+    }
+
+    pub fn continuity_export(&self) -> String {
+        encode_continuity(&ContinuityState {
+            active_goal: self.goals.active().cloned(),
+            queued_actions: self.queue.items().cloned().collect(),
+        })
+    }
+
+    pub fn continuity_import(&mut self, text: &str) -> bool {
+        let Some(state) = decode_continuity(text) else {
+            return false;
+        };
+        if let Some(goal) = state.active_goal {
+            self.goals.restore_active(goal);
+        }
+        self.queue.clear();
+        for action in state.queued_actions {
+            self.queue.push(action);
+        }
+        true
+    }
+
+    pub fn queue_len(&self) -> usize {
+        self.queue.len()
     }
 
     pub fn authorize(&self, proposal: ActionProposal) -> ActionDecision {
@@ -188,6 +232,18 @@ fn extract_goal(input: &str) -> Option<&str> {
         }
     }
     None
+}
+
+fn is_goal_command(input: &str) -> bool {
+    let lower = input.to_lowercase();
+    lower.starts_with("mục tiêu") || lower.starts_with("muc tieu")
+}
+
+fn is_continue(input: &str) -> bool {
+    matches!(
+        input.trim().to_lowercase().as_str(),
+        "tiếp tục" | "tiep tuc" | "làm tiếp" | "lam tiep" | "kế tiếp" | "ke tiep"
+    )
 }
 
 fn stable_id(text: &str, timestamp: u64) -> u64 {
