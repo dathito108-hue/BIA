@@ -3,7 +3,7 @@ package com.bia.mobile;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.AlertDialog;
-import android.app.BatteryManager;
+import android.os.BatteryManager;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
