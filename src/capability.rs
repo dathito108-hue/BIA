@@ -172,3 +172,19 @@ fn normalize(s: &str) -> String {
         })
         .collect()
 }
+
+
+pub fn action_for_goal(description: &str, id: u64) -> Option<DeviceAction> {
+    let n = normalize(description);
+    if n.contains("tim ") || n.starts_with("tim") || n.contains("tra cuu") || n.contains("nghien cuu") {
+        return Some(DeviceAction {
+            id,
+            kind: DeviceActionKind::SearchWeb,
+            payload: description.trim().to_string(),
+            authority: Authority::Reversible,
+            confidence: 0.82,
+            label: format!("Tiếp tục mục tiêu bằng tìm web: {}", description.trim()),
+        });
+    }
+    None
+}
