@@ -523,6 +523,36 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeContinualV81(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeAutonomousLoopV101(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let report = crate::run_v101_autonomous_loop_evaluation();
+    java_string(
+        &mut env,
+        format!(
+            "V101 loop: pass={}, cases={}, questions={}/{}, critic={}/{}, loop={}/{}, self_review={}/{}, idle={}/{}, authority={}/{}, accuracy={:.3}, elapsed_us={}",
+            report.passed(),
+            report.cases,
+            report.question_passes,
+            report.cases,
+            report.critic_passes,
+            report.cases,
+            report.loop_passes,
+            report.cases,
+            report.self_review_passes,
+            report.cases,
+            report.idle_passes,
+            report.cases,
+            report.authority_passes,
+            report.cases,
+            report.accuracy(),
+            report.elapsed.as_micros()
+        ),
+    )
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
