@@ -1,0 +1,68 @@
+# BIA-DCA Roadmap
+
+## D0 — Canonical Dharma Core
+Tam Thiên WorldGraph, Duyên relations, bounded CognitiveMoment, Chủng tử memory, Trung Đạo device budgeter and Quán–Trí–Hành loop.
+
+**Acceptance:** dependency-free Rust core; deterministic ceilings; tests; no imported model-family core.
+
+## D1 — Persistent Dharma Memory
+Binary portable storage for phenomena, relations, seeds, confidence and provenance; crash-safe append/checkpoint/restore.
+
+**Acceptance:** same memory file can move between Android/desktop builds; bounded corruption recovery.
+
+## D2 — Meaning Formation
+Incremental concept formation from repeated phenomena, relation induction, contradiction tracking, confidence calibration and forgetting.
+
+**Acceptance:** learns new categories/relations from experience without global weight retraining.
+
+## D3 — Language as a Gate, Not the Mind
+Vietnamese-first byte/phoneme/word observation and expression layers that translate language into/from BIA phenomena and intentions.
+
+**Acceptance:** internal reasoning remains phenomenon/relation based; language adapter can be disabled.
+
+## D4 — Multi-Cảnh Perception
+Image/audio/sensor adapters produce normalized phenomena; cross-modal identity binding occurs in the Duyên graph.
+
+**Acceptance:** adapters remain replaceable and do not alter the BIA core.
+
+## D5 — Deep Quán and Planning
+Counterfactual branches, causal-chain search, goal decomposition, uncertainty-directed observation and explicit stop/abstain policy.
+
+**Acceptance:** bounded cycles; inspectable hypotheses; deterministic resource caps.
+
+## D6 — Cư Trần Action Fabric
+Typed tools and device actions, permission boundaries, consequence receipts and world feedback.
+
+**Acceptance:** cognition proposes; authority layer permits/denies; irreversible actions require explicit policy approval.
+
+## D7 — On-device Huân Tập
+Experience consolidation, causal-credit updates, relation revision, rollbackable skill packages and local evaluation.
+
+**Acceptance:** learning is measurable and reversible; base contracts cannot silently mutate.
+
+## D8 — Universal Runtime
+no_std-capable subset where practical, ARM64/x86_64/WASM targets, Android wrapper, persistence and benchmark suite.
+
+**Acceptance:** one canonical data/runtime contract across device classes.
+
+## D9 — BIA Intelligence Curriculum
+Progressive environment curriculum covering language, physical/common-sense relations, tool use, planning and self-correction.
+
+**Acceptance:** benchmark improvements come from BIA learning mechanisms rather than substituting an external foundation model.
+
+## D10 — Integrated Mobile BIA
+Offline-first app with memory, Vietnamese dialogue, perception, planning and permission-gated actions.
+
+**Acceptance:** install-and-run mobile package; cloud optional; measured RAM/latency/energy tiers.
+
+## Highest-level completion criterion
+
+BIA is considered mature only when all of the following are demonstrated empirically:
+1. portable cognition across device classes;
+2. continual learning without catastrophic loss of validated skills;
+3. grounded language/perception/action loop;
+4. causal and counterfactual reasoning;
+5. calibrated uncertainty and abstention;
+6. bounded resource usage;
+7. transparent, inspectable memory and hypotheses;
+8. no hidden dependence on an LLM/Transformer/SSM/Mamba runtime.
