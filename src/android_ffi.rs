@@ -213,6 +213,34 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeBenchmarkV12(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeStressV14(
+    mut env: JNIEnv,
+    _class: JClass,
+    iterations: jint,
+) -> jstring {
+    let loops = iterations.clamp(100, 50_000) as usize;
+    let report = crate::run_v14_stress(loops);
+    java_string(
+        &mut env,
+        format!(
+            "V14 stress: pass={}, loops={}, bounded={}/{}, state={}/{}, noise={}/{}, deterministic={}/{}, elapsed_ms={}, ns/iter={}",
+            report.passed(),
+            report.iterations,
+            report.bounded_token_passes,
+            report.iterations,
+            report.finite_state_passes,
+            report.iterations,
+            report.noise_passes,
+            report.iterations,
+            report.deterministic_replay_passes,
+            report.iterations,
+            report.elapsed.as_millis(),
+            report.ns_per_iteration()
+        ),
+    )
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
