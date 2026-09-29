@@ -63,10 +63,16 @@ impl OpenIntelligence {
         }
         self.latent_memory.remember(concept_id(&canonical), &canonical, 0.85);
         let _ = self.semantic_compressor.observe(&canonical, 0.85);
-        for clause in &scene.clauses {
-            let example = format!("{} -> {}", clause.subject.text, clause.object.text);
+        if scene.clauses.len() == 1 {
+            let clause = &scene.clauses[0];
             self.latent_relations
-                .observe(&example, clause.kind, clause.confidence);
+                .observe(&canonical, clause.kind, clause.confidence);
+        } else {
+            for clause in &scene.clauses {
+                let example = format!("{} -> {}", clause.subject.text, clause.object.text);
+                self.latent_relations
+                    .observe(&example, clause.kind, clause.confidence);
+            }
         }
         self.episodes.observe(&scene, timestamp, 0.5);
         let _ = self.discovery.apply(world);
