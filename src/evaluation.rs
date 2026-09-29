@@ -529,3 +529,121 @@ pub fn run_v16_generalization_evaluation() -> V16GeneralizationReport {
         elapsed: start.elapsed(),
     }
 }
+
+
+#[derive(Clone, Debug)]
+pub struct V18OpenReasoningReport {
+    pub cases: usize,
+    pub parse_passes: usize,
+    pub composition_passes: usize,
+    pub counterfactual_passes: usize,
+    pub contradiction_passes: usize,
+    pub paraphrase_passes: usize,
+    pub elapsed: Duration,
+}
+
+impl V18OpenReasoningReport {
+    pub fn passed(&self) -> bool {
+        self.parse_passes == self.cases
+            && self.composition_passes == self.cases
+            && self.counterfactual_passes == self.cases
+            && self.contradiction_passes == self.cases
+            && self.paraphrase_passes == self.cases
+    }
+
+    pub fn accuracy(&self) -> f32 {
+        let denom = (self.cases * 5).max(1) as f32;
+        (self.parse_passes
+            + self.composition_passes
+            + self.counterfactual_passes
+            + self.contradiction_passes
+            + self.paraphrase_passes) as f32
+            / denom
+    }
+}
+
+pub fn run_v18_open_reasoning_evaluation() -> V18OpenReasoningReport {
+    use crate::open_reasoning::{OpenAnswer, SemanticReasoner};
+    use crate::world::WorldGraph;
+
+    let start = Instant::now();
+    let cases = 128usize;
+    let mut parse = 0usize;
+    let mut composition = 0usize;
+    let mut counterfactual = 0usize;
+    let mut contradiction = 0usize;
+    let mut paraphrase = 0usize;
+
+    for i in 0..cases {
+        let a = format!("nguon{i}");
+        let b = format!("trung{i}");
+        let c = format!("dich{i}");
+        let d = format!("chan{i}");
+
+        let reasoner = SemanticReasoner::default();
+
+        let chain_text = format!(
+            "{a} gây ra {b}. {b} dẫn đến {c}. {a} có gây ra {c} không?"
+        );
+        let mut world = WorldGraph::new(128, 256);
+        let scene = reasoner.ingest(&mut world, &chain_text, i as u64 * 10);
+        if scene.clauses.len() == 2 && scene.query.is_some() {
+            parse += 1;
+        }
+        if matches!(
+            reasoner.answer_scene(&world, &scene),
+            OpenAnswer::Supported { path, .. } if path.len() == 3
+        ) {
+            composition += 1;
+        }
+
+        let cf_text = format!(
+            "{a} gây ra {b}. {b} làm cho {c}. nếu bỏ {b} thì {c}?"
+        );
+        let mut cf_world = WorldGraph::new(128, 256);
+        let cf_scene = reasoner.ingest(&mut cf_world, &cf_text, i as u64 * 10 + 1);
+        if matches!(
+            reasoner.answer_scene(&cf_world, &cf_scene),
+            OpenAnswer::Counterfactual { support_delta, .. } if support_delta > 0.20
+        ) {
+            counterfactual += 1;
+        }
+
+        let conflict_text = format!(
+            "{a} gây ra {c}. {d} ngăn {c}. {a} có gây ra {c} không?"
+        );
+        let mut conflict_world = WorldGraph::new(128, 256);
+        let conflict_scene =
+            reasoner.ingest(&mut conflict_world, &conflict_text, i as u64 * 10 + 2);
+        if matches!(
+            reasoner.answer_scene(&conflict_world, &conflict_scene),
+            OpenAnswer::Contradicted { support, opposition }
+                if support > 0.5 && opposition > 0.5
+        ) {
+            contradiction += 1;
+        }
+
+        let paraphrase_text = format!(
+            "vì {a} nên {b}. {b} khiến {c}. {a} có dẫn đến {c} không?"
+        );
+        let mut paraphrase_world = WorldGraph::new(128, 256);
+        let paraphrase_scene =
+            reasoner.ingest(&mut paraphrase_world, &paraphrase_text, i as u64 * 10 + 3);
+        if matches!(
+            reasoner.answer_scene(&paraphrase_world, &paraphrase_scene),
+            OpenAnswer::Supported { .. }
+        ) {
+            paraphrase += 1;
+        }
+    }
+
+    V18OpenReasoningReport {
+        cases,
+        parse_passes: parse,
+        composition_passes: composition,
+        counterfactual_passes: counterfactual,
+        contradiction_passes: contradiction,
+        paraphrase_passes: paraphrase,
+        elapsed: start.elapsed(),
+    }
+}
