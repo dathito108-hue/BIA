@@ -222,3 +222,18 @@ This block bridges natural Vietnamese text into BIA's causal intelligence:
 - **Android proof:** `/openproof` runs the open-reasoning evaluation natively.
 
 The parser is intentionally bounded and rule-guided. Passing the suite proves that BIA can turn a defined family of previously unseen Vietnamese causal sentences into graph reasoning; it does not prove unrestricted natural-language understanding.
+
+
+## Inference V21–V24 — Abstraction, Induction and Analogy
+
+This block deepens BIA's open intelligence without adding a large language model backend.
+
+- **Concept abstraction:** explicit synonym/definition statements can merge multiple surface forms into one bounded canonical concept group.
+- **Paraphrase resilience:** later causal queries can use a learned alias and still address the same concept graph.
+- **Structural analogy:** when source and target entities are marked similar, BIA can transfer a causal/enabling/inhibiting relation with discounted confidence.
+- **Induction from examples:** a target relation is induced only when at least two structurally similar source examples support the same relation kind.
+- **Compositional reasoning after abstraction:** synonym learning and multi-hop causal reasoning work together.
+- **Bounded memory:** concept groups are capped at 256, aliases at 8 per group, analogy hypotheses at 16, and induction scans at most 64 source relations.
+- **Android proof:** `/deep` runs the V21–V24 proof suite natively.
+
+These capabilities are structured symbolic/generalization mechanisms. They improve breadth and transfer but do not make BIA equivalent to a frontier-scale language model.
