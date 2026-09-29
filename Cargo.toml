@@ -1,0 +1,18 @@
+[package]
+name = "bia-core"
+version = "0.1.0"
+edition = "2021"
+description = "BIA-KSANA-1 mobile-first Buddhist-inspired process intelligence reference core"
+license = "Apache-2.0"
+
+[lib]
+name = "bia_core"
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[dependencies]
