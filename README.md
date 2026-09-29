@@ -58,6 +58,6 @@ The goal is broad portability, not the physically impossible claim that identica
 
 ## Status
 
-The repository now contains a dependency-free Rust **BIA-DCA reference runtime** with portable checked persistence and incremental meaning formation. It is a functioning architecture kernel, not yet a fully developed general intelligence. The next engineering work is the Vietnamese language gate, perception adapters, deeper contemplation/planning, action interfaces, benchmarking and Android packaging.
+The repository now includes a usable Android shell backed by the native Rust **BIA-DCA runtime**. Mobile V2 adds a redesigned offline chat interface, human-readable Vietnamese responses, native Dharma-memory save/restore across app restarts, live cognition status, and ARM64 APK CI. It is still an experimental intelligence architecture rather than a proven AGI.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
