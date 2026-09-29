@@ -53,6 +53,14 @@ impl GoalStack {
         });
     }
 
+    pub fn restore_active(&mut self, goal: Goal) {
+        self.goals.retain(|g| g.status != GoalStatus::Active);
+        self.goals.push(goal);
+        if self.goals.len() > self.capacity {
+            self.goals.remove(0);
+        }
+    }
+
     pub fn active(&self) -> Option<&Goal> {
         self.goals
             .iter()
