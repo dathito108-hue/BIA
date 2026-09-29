@@ -102,3 +102,18 @@ This capability pack expands BIA without introducing an LLM/Transformer/SSM back
 - **Goal decomposition:** explicit goals can be split into multiple executable device actions when the goal contains recognizable action clauses.
 - **Continuity v2:** active goals, pending actions and provenance records survive restart.
 - **No broad storage permission:** local document access uses Android's Storage Access Framework.
+
+
+## Inference V9 — Tam-Thiên Matrix
+
+BIA now has a dedicated hot-path inference primitive inspired by the *three nested thousands* structure of the Buddhist trichiliocosm. The inspiration is structural, not a claim that Buddhist cosmology is a numerical AI algorithm.
+
+- **Tiểu Thiên:** sparse local signals are accumulated into 16 fixed Q15 lanes. Only active lanes are touched.
+- **Trung Thiên:** each lane mixes only its nearest causal neighborhood, avoiding all-to-all interaction.
+- **Đại Thiên:** four coarse sectors summarize local bundles and select the global winner/decision.
+- **Early exit:** if Tiểu Thiên already has sufficient strength and margin, BIA emits an immediate first word-token without waiting for deeper contemplation.
+- **Fixed-point path:** Q15 integer arithmetic avoids floating-point matrix multiplication in the hot path.
+- **Bounded work:** input sampling is capped, lane count is fixed, and the core hierarchy remains O(1) with respect to stored world size for the fast path.
+- **Asynchronous Android response:** the UI can render the immediate token first and run full native contemplation off the UI thread.
+
+This is not Transformer token prediction. The current token path is a deterministic BIA word-token emitter driven by the hierarchical inference state.
