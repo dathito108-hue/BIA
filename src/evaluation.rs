@@ -1365,3 +1365,212 @@ pub fn run_v37_deliberation_evaluation() -> V37DeliberationReport {
         elapsed: start_time.elapsed(),
     }
 }
+
+
+#[derive(Clone, Debug)]
+pub struct V45MaxIntelligenceReport {
+    pub cases: usize,
+    pub metacognition_passes: usize,
+    pub calibration_passes: usize,
+    pub evidence_passes: usize,
+    pub recursive_passes: usize,
+    pub compute_routing_passes: usize,
+    pub transfer_passes: usize,
+    pub elapsed: Duration,
+}
+
+impl V45MaxIntelligenceReport {
+    pub fn passed(&self) -> bool {
+        self.metacognition_passes == self.cases
+            && self.calibration_passes == self.cases
+            && self.evidence_passes == self.cases
+            && self.recursive_passes == self.cases
+            && self.compute_routing_passes == self.cases
+            && self.transfer_passes == self.cases
+    }
+
+    pub fn accuracy(&self) -> f32 {
+        let denom = (self.cases * 6).max(1) as f32;
+        (self.metacognition_passes
+            + self.calibration_passes
+            + self.evidence_passes
+            + self.recursive_passes
+            + self.compute_routing_passes
+            + self.transfer_passes) as f32
+            / denom
+    }
+}
+
+pub fn run_v45_max_intelligence_evaluation() -> V45MaxIntelligenceReport {
+    use crate::active_evidence::{ActiveEvidenceSeeker, EvidenceRequestKind};
+    use crate::budget::DeviceState;
+    use crate::calibration::SelfCalibration;
+    use crate::metacognition::{CognitiveDecision, MetacognitiveController};
+    use crate::recursive_deliberation::RecursiveDeliberator;
+    use crate::self_directed_compute::{ReasoningTier, SelfDirectedCompute};
+    use crate::skill_transfer::CrossDomainTransfer;
+    use crate::world_model::{TransitionModel, WorldModel};
+
+    let start = Instant::now();
+    let cases = 128usize;
+    let mut metacognition = 0usize;
+    let mut calibration = 0usize;
+    let mut evidence = 0usize;
+    let mut recursive = 0usize;
+    let mut routing = 0usize;
+    let mut transfer = 0usize;
+
+    for i in 0..cases {
+        let controller = MetacognitiveController;
+        let confident = controller.assess(0.96, 0.02, 2, 8);
+        let conflicted = controller.assess(0.82, 0.76, 4, 4);
+        if confident.decision == CognitiveDecision::Answer
+            && confident.certainty > 0.72
+            && conflicted.decision == CognitiveDecision::SeekEvidence
+            && conflicted.conflict > 0.45
+        {
+            metacognition += 1;
+        }
+
+        let mut self_cal = SelfCalibration::default();
+        for _ in 0..8 {
+            self_cal.observe(0.90, false);
+        }
+        for _ in 0..8 {
+            self_cal.observe(0.80, true);
+        }
+        let before = 0.82f32;
+        let adjusted = self_cal.adjusted(before);
+        if self_cal.len() == 16
+            && self_cal.bias() > 0.0
+            && adjusted < before
+            && self_cal.brier_score() > 0.0
+        {
+            calibration += 1;
+        }
+
+        let seeker = ActiveEvidenceSeeker;
+        if seeker
+            .request(i as u64 + 1, &conflicted, false)
+            .is_some_and(|r| {
+                r.kind == EvidenceRequestKind::Opposing
+                    && r.priority > 0.30
+            })
+        {
+            evidence += 1;
+        }
+
+        let deliberator = RecursiveDeliberator::default();
+        let rr = deliberator.run(0.40, |depth, score| {
+            if depth <= 2 {
+                score + 0.12
+            } else {
+                score + 0.01
+            }
+        });
+        if rr.final_score > 0.60
+            && rr.passes.len() <= 4
+            && rr.stopped_early
+        {
+            recursive += 1;
+        }
+
+        let compute = SelfDirectedCompute;
+        let hard = controller.assess(0.58, 0.08, 7, 4);
+        let deep_route = compute.route(
+            &hard,
+            DeviceState {
+                battery: 0.9,
+                thermal: 0.1,
+                load: 0.1,
+                available_memory_mb: 1024,
+            },
+        );
+        let pressure_route = compute.route(
+            &hard,
+            DeviceState {
+                battery: 0.08,
+                thermal: 0.95,
+                load: 0.92,
+                available_memory_mb: 96,
+            },
+        );
+        if deep_route.tier == ReasoningTier::Deep
+            && deep_route.reasoning_passes >= 3
+            && pressure_route.tier == ReasoningTier::Instant
+            && pressure_route.reasoning_passes == 1
+        {
+            routing += 1;
+        }
+
+        let base = i as u64 * 1000;
+        let mut source = WorldModel::default();
+        source.add_transition(TransitionModel {
+            action: base + 1,
+            requires: vec![],
+            adds: vec![base + 100],
+            removes: vec![],
+            utility: 0.5,
+            cost: 0.1,
+            confidence: 0.95,
+        });
+        source.add_transition(TransitionModel {
+            action: base + 2,
+            requires: vec![],
+            adds: vec![base + 101, base + 102],
+            removes: vec![],
+            utility: 0.8,
+            cost: 0.1,
+            confidence: 0.95,
+        });
+
+        let xfer = CrossDomainTransfer;
+        if let Some(pattern) = xfer.extract(&source, &[base + 1, base + 2]) {
+            let mut target = WorldModel::default();
+            target.add_transition(TransitionModel {
+                action: base + 11,
+                requires: vec![],
+                adds: vec![base + 201],
+                removes: vec![],
+                utility: 0.4,
+                cost: 0.05,
+                confidence: 0.9,
+            });
+            target.add_transition(TransitionModel {
+                action: base + 12,
+                requires: vec![],
+                adds: vec![base + 202, base + 203],
+                removes: vec![],
+                utility: 0.9,
+                cost: 0.1,
+                confidence: 0.9,
+            });
+            target.add_transition(TransitionModel {
+                action: base + 13,
+                requires: vec![],
+                adds: vec![base + 204, base + 205, base + 206],
+                removes: vec![],
+                utility: -0.3,
+                cost: 0.2,
+                confidence: 0.9,
+            });
+            if xfer
+                .match_actions(&target, &pattern)
+                .is_some_and(|actions| actions == vec![base + 11, base + 12])
+            {
+                transfer += 1;
+            }
+        }
+    }
+
+    V45MaxIntelligenceReport {
+        cases,
+        metacognition_passes: metacognition,
+        calibration_passes: calibration,
+        evidence_passes: evidence,
+        recursive_passes: recursive,
+        compute_routing_passes: routing,
+        transfer_passes: transfer,
+        elapsed: start.elapsed(),
+    }
+}
