@@ -9,7 +9,8 @@ use crate::duyen_token::DuyenTokenDecoder;
 use crate::goals::{GoalStack, GoalStatus};
 use crate::knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
 use crate::language::VietnameseGate;
-use crate::open_reasoning::{OpenAnswer, SemanticReasoner};
+use crate::open_intelligence::OpenIntelligence;
+use crate::open_reasoning::OpenAnswer;
 use crate::token_stream::{InstantToken, InstantTokenEmitter};
 use crate::planner::decompose_goal;
 use crate::retrieval::SemanticRetriever;
@@ -31,7 +32,7 @@ pub struct OfflineMobileBia {
     pub knowledge: KnowledgeLedger,
     pub tokens: InstantTokenEmitter,
     pub decoder: DuyenTokenDecoder,
-    pub semantic: SemanticReasoner,
+    pub intelligence: OpenIntelligence,
     pub retriever: SemanticRetriever,
     queue: ActionQueue,
 }
@@ -47,7 +48,7 @@ impl OfflineMobileBia {
             knowledge: KnowledgeLedger::new(96),
             tokens: InstantTokenEmitter::default(),
             decoder: DuyenTokenDecoder::default(),
-            semantic: SemanticReasoner::default(),
+            intelligence: OpenIntelligence::default(),
             retriever: SemanticRetriever,
             queue: ActionQueue::new(12),
         }
@@ -66,20 +67,20 @@ impl OfflineMobileBia {
         });
 
         let semantic_scene = self
-            .semantic
-            .ingest(&mut self.bia.world, text, timestamp);
+            .intelligence
+            .learn(&mut self.bia.world, text, timestamp);
         let mut semantic_answer = self
-            .semantic
+            .intelligence
             .answer_scene(&self.bia.world, &semantic_scene);
         if semantic_scene.query.is_some() && matches!(semantic_answer, OpenAnswer::Unknown) {
             let hits = self.retriever.recall(&self.knowledge, text, 3);
             for hit in hits {
                 let _ = self
-                    .semantic
-                    .ingest(&mut self.bia.world, &hit.record.excerpt, timestamp);
+                    .intelligence
+                    .learn(&mut self.bia.world, &hit.record.excerpt, timestamp);
             }
             semantic_answer = self
-                .semantic
+                .intelligence
                 .answer_scene(&self.bia.world, &semantic_scene);
         }
 
@@ -201,7 +202,9 @@ impl OfflineMobileBia {
             confidence: confidence.clamp(0.0, 1.0),
         });
         let _ = self.decoder.learn_text(&excerpt);
-        let _ = self.semantic.ingest(&mut self.bia.world, &excerpt, timestamp);
+        let _ = self
+            .intelligence
+            .learn(&mut self.bia.world, &excerpt, timestamp);
 
         let phenomena = self.language.perceive(&excerpt, timestamp);
         let mut count = 0usize;

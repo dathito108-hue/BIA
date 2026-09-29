@@ -323,6 +323,32 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeOpenReasoningV18(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeDeepIntelligenceV21(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let report = crate::run_v21_deep_intelligence_evaluation();
+    java_string(
+        &mut env,
+        format!(
+            "V21 deep intelligence: pass={}, cases={}, abstraction={}/{}, analogy={}/{}, induction={}/{}, composition={}/{}, accuracy={:.3}, elapsed_us={}",
+            report.passed(),
+            report.cases,
+            report.abstraction_passes,
+            report.cases,
+            report.analogy_passes,
+            report.cases,
+            report.induction_passes,
+            report.cases,
+            report.compositional_passes,
+            report.cases,
+            report.accuracy(),
+            report.elapsed.as_micros()
+        ),
+    )
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,

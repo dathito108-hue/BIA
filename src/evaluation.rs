@@ -647,3 +647,134 @@ pub fn run_v18_open_reasoning_evaluation() -> V18OpenReasoningReport {
         elapsed: start.elapsed(),
     }
 }
+
+
+#[derive(Clone, Debug)]
+pub struct V21DeepIntelligenceReport {
+    pub cases: usize,
+    pub abstraction_passes: usize,
+    pub analogy_passes: usize,
+    pub induction_passes: usize,
+    pub compositional_passes: usize,
+    pub elapsed: Duration,
+}
+
+impl V21DeepIntelligenceReport {
+    pub fn passed(&self) -> bool {
+        self.abstraction_passes == self.cases
+            && self.analogy_passes == self.cases
+            && self.induction_passes == self.cases
+            && self.compositional_passes == self.cases
+    }
+
+    pub fn accuracy(&self) -> f32 {
+        let denom = (self.cases * 4).max(1) as f32;
+        (self.abstraction_passes
+            + self.analogy_passes
+            + self.induction_passes
+            + self.compositional_passes) as f32
+            / denom
+    }
+}
+
+pub fn run_v21_deep_intelligence_evaluation() -> V21DeepIntelligenceReport {
+    use crate::open_intelligence::OpenIntelligence;
+    use crate::open_reasoning::OpenAnswer;
+    use crate::semantic::concept_id;
+    use crate::world::WorldGraph;
+
+    let start = Instant::now();
+    let cases = 128usize;
+    let mut abstraction = 0usize;
+    let mut analogy = 0usize;
+    let mut induction = 0usize;
+    let mut compositional = 0usize;
+
+    for i in 0..cases {
+        let canonical = format!("nguon_chinh_{i}");
+        let alias = format!("ten_khac_{i}");
+        let middle = format!("trung_gian_{i}");
+        let target = format!("dich_{i}");
+
+        let mut intelligence = OpenIntelligence::default();
+        let mut world = WorldGraph::new(256, 512);
+
+        let _ = intelligence.learn(
+            &mut world,
+            &format!("{canonical} còn gọi là {alias}."),
+            i as u64 * 100,
+        );
+        let scene = intelligence.learn(
+            &mut world,
+            &format!(
+                "{canonical} gây ra {middle}. {alias} có gây ra {middle} không?"
+            ),
+            i as u64 * 100 + 1,
+        );
+        if matches!(
+            intelligence.answer_scene(&world, &scene),
+            OpenAnswer::Supported { .. }
+        ) {
+            abstraction += 1;
+        }
+
+        let analog_from = format!("tuong_tu_nguon_{i}");
+        let analog_to = format!("tuong_tu_dich_{i}");
+        let scene = intelligence.learn(
+            &mut world,
+            &format!(
+                "{canonical} gây ra {target}. {analog_from} giống {canonical}. {analog_to} giống {target}. {analog_from} có gây ra {analog_to} không?"
+            ),
+            i as u64 * 100 + 2,
+        );
+        if matches!(
+            intelligence.answer_scene(&world, &scene),
+            OpenAnswer::Supported { .. }
+        ) {
+            analogy += 1;
+        }
+
+        let a1 = format!("mau_a1_{i}");
+        let a2 = format!("mau_a2_{i}");
+        let b1 = format!("mau_b1_{i}");
+        let b2 = format!("mau_b2_{i}");
+        let x = format!("muc_tieu_x_{i}");
+        let y = format!("muc_tieu_y_{i}");
+        let _ = intelligence.learn(
+            &mut world,
+            &format!(
+                "{a1} gây ra {b1}. {a2} gây ra {b2}. {x} giống {a1}. {x} giống {a2}. {y} giống {b1}. {y} giống {b2}."
+            ),
+            i as u64 * 100 + 3,
+        );
+        if intelligence
+            .induce_between(&world, concept_id(&x), concept_id(&y))
+            .is_some_and(|r| r.supports >= 2 && r.relation.confidence > 0.60)
+        {
+            induction += 1;
+        }
+
+        let scene = intelligence.learn(
+            &mut world,
+            &format!(
+                "{canonical} gây ra {middle}. {middle} dẫn đến {target}. {alias} có gây ra {target} không?"
+            ),
+            i as u64 * 100 + 4,
+        );
+        if matches!(
+            intelligence.answer_scene(&world, &scene),
+            OpenAnswer::Supported { path, .. } if path.len() >= 3
+        ) {
+            compositional += 1;
+        }
+    }
+
+    V21DeepIntelligenceReport {
+        cases,
+        abstraction_passes: abstraction,
+        analogy_passes: analogy,
+        induction_passes: induction,
+        compositional_passes: compositional,
+        elapsed: start.elapsed(),
+    }
+}

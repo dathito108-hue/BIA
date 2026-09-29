@@ -2,6 +2,8 @@
 
 #[cfg(target_os = "android")]
 pub mod android_ffi;
+pub mod abstraction;
+pub mod analogy;
 pub mod action;
 pub mod action_queue;
 pub mod adaptation;
@@ -15,6 +17,7 @@ pub mod evaluation;
 pub mod curriculum;
 pub mod four_matrix;
 pub mod goals;
+pub mod induction;
 pub mod inference_matrix;
 pub mod knowledge;
 pub mod language;
@@ -24,6 +27,7 @@ pub mod planner;
 pub mod planning;
 pub mod memory;
 pub mod mobile;
+pub mod open_intelligence;
 pub mod open_reasoning;
 pub mod persistence;
 pub mod reasoning;
@@ -34,7 +38,9 @@ pub mod token_stream;
 pub mod types;
 pub mod world;
 
+pub use abstraction::{ConceptAbstraction, ConceptGroup};
 pub use action::{ActionDecision, ActionProposal, Authority, CuTranPolicy};
+pub use analogy::{AnalogicalHypothesis, AnalogicalReasoner};
 pub use action_queue::ActionQueue;
 pub use adaptation::{causal_credit, evaluate_delta, PromotionDecision, SkillDelta};
 pub use budget::{middle_way, Budget, DeviceState};
@@ -43,13 +49,14 @@ pub use continuity::{decode_continuity, encode_continuity, ContinuityState};
 pub use core::{BiaDca, BiaDcaConfig};
 pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
-pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport};
+pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport};
 pub use four_matrix::{
     adaptive_realm_weights, classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
     FourMatrixOutput, PerspectiveProjection, RealmBand, AGGREGATES,
 };
 pub use goals::{Goal, GoalStack, GoalStatus};
 pub use curriculum::{score as score_curriculum, CurriculumDomain, CurriculumScore, TrialResult};
+pub use induction::{InducedRelation, InductiveReasoner};
 pub use inference_matrix::{f32_to_q15, q15_to_f32, MatrixDecision, MatrixLevel, MatrixSignal, TamThienMatrix, LANES};
 pub use knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
 pub use language::{LanguageIntent, VietnameseGate};
@@ -59,6 +66,7 @@ pub use planner::{decompose_goal, Plan as DevicePlan};
 pub use planning::{DeepQuan, Plan, PlanStep};
 pub use memory::{Seed, SeedMemory};
 pub use mobile::{MobileReply, OfflineMobileBia};
+pub use open_intelligence::OpenIntelligence;
 pub use open_reasoning::{OpenAnswer, SemanticReasoner};
 pub use persistence::{decode, encode, read_file, write_atomic, DharmaSnapshot, PersistenceError};
 pub use reasoning::{CausalPath, CausalReasoner, CounterfactualVerdict, ReasoningVerdict};
@@ -920,6 +928,54 @@ mod tests {
             )
             .expect("reply");
         assert!(reply.text.contains("ủng hộ"));
+    }
+
+    #[test]
+    fn abstraction_unifies_learned_synonym() {
+        let mut abstraction = ConceptAbstraction::default();
+        assert_eq!(abstraction.learn_from_text("pin yếu còn gọi là low battery."), 1);
+        assert_eq!(
+            abstraction.canonical_phrase("low battery"),
+            abstraction.canonical_phrase("pin yếu")
+        );
+    }
+
+    #[test]
+    fn analogy_transfers_relation_across_similar_entities() {
+        let mut intelligence = OpenIntelligence::default();
+        let mut world = WorldGraph::new(64, 128);
+        let scene = intelligence.learn(
+            &mut world,
+            "mưa lớn gây ra đường ướt. mưa nhẹ giống mưa lớn. sân ẩm giống đường ướt. mưa nhẹ có gây ra sân ẩm không?",
+            1,
+        );
+        assert!(matches!(
+            intelligence.answer_scene(&world, &scene),
+            OpenAnswer::Supported { .. }
+        ));
+    }
+
+    #[test]
+    fn induction_requires_multiple_structural_examples() {
+        let mut intelligence = OpenIntelligence::default();
+        let mut world = WorldGraph::new(64, 128);
+        let _ = intelligence.learn(
+            &mut world,
+            "a1 gây ra b1. a2 gây ra b2. x giống a1. x giống a2. y giống b1. y giống b2.",
+            1,
+        );
+        let induced = intelligence
+            .induce_between(&world, concept_id("x"), concept_id("y"))
+            .expect("induced relation");
+        assert!(induced.supports >= 2);
+        assert_eq!(induced.relation.kind, RelationKind::Causes);
+    }
+
+    #[test]
+    fn v21_deep_intelligence_suite_passes() {
+        let report = run_v21_deep_intelligence_evaluation();
+        assert!(report.passed(), "report={report:?}");
+        assert_eq!(report.accuracy(), 1.0);
     }
 
 }

@@ -63,6 +63,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     public static native String nativeReasoningV15();
     public static native String nativeGeneralizeV16();
     public static native String nativeOpenReasoningV18();
+    public static native String nativeDeepIntelligenceV21();
     public static native long nativeCycleCount();
     public static native String nativeStatus();
     public static native boolean nativeSave(String path);
@@ -481,6 +482,18 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     refreshStatus();
                 });
             }, "bia-open-reasoning-proof").start();
+            return;
+        }
+
+        if (text.equalsIgnoreCase("/deep") || text.equalsIgnoreCase("deep")) {
+            new Thread(() -> {
+                String report = nativeDeepIntelligenceV21();
+                runOnUiThread(() -> {
+                    lastReply = report;
+                    addBubble(report, false);
+                    refreshStatus();
+                });
+            }, "bia-deep-intelligence-proof").start();
             return;
         }
 
