@@ -133,3 +133,18 @@ The hot path now runs:
 - All hot-path arrays are fixed size (5 and 16 lanes) and do not grow with context size.
 
 The Buddhist terminology is architectural inspiration, not a claim that Buddhist doctrine is a literal numerical model of cognition.
+
+
+## Inference V11 — Adaptive Realm + Duyên-Token
+
+V11 moves the instant output path from a fixed discourse-word emitter to a recurrent Duyên-token decoder.
+
+- Realm masks are now adaptive per event: the base realm prior is modulated by the actual five-channel signal distribution.
+- The Duyên-token decoder feeds each generated token back into an 8-lane recurrent state and re-runs the bounded Four-Matrix → Tam-Thiên decision.
+- Internal inference signals use fixed stack arrays; generated output is capped at 48 word-tokens.
+- The Android instant-token JNI path now uses the Duyên-token decoder directly.
+- A release evaluation suite verifies semantic first-token behavior, deterministic output, realm classification and a complexity-regression benchmark.
+
+### What V11 proves — and what it does not
+
+The automated evidence demonstrates that the current bounded task set is executable, deterministic, resource-bounded and fast on the GitHub Actions x86_64 runner, while the same Rust core cross-compiles into the ARM64 Android APK. It does **not** prove open-domain language quality or phone-specific latency; those require a device benchmark and a broader held-out corpus.

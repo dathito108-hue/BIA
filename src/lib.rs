@@ -10,6 +10,8 @@ pub mod capability;
 pub mod continuity;
 pub mod core;
 pub mod dialogue;
+pub mod duyen_token;
+pub mod evaluation;
 pub mod curriculum;
 pub mod four_matrix;
 pub mod goals;
@@ -36,8 +38,10 @@ pub use capability::{action_for_goal, encode_action, infer_device_action, Device
 pub use continuity::{decode_continuity, encode_continuity, ContinuityState};
 pub use core::{BiaDca, BiaDcaConfig};
 pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
+pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
+pub use evaluation::{run_v11_evaluation, V11Report};
 pub use four_matrix::{
-    classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
+    adaptive_realm_weights, classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
     FourMatrixOutput, PerspectiveProjection, RealmBand, AGGREGATES,
 };
 pub use goals::{Goal, GoalStack, GoalStatus};
@@ -640,6 +644,32 @@ mod tests {
         let before = bia.memory.len();
         let _ = bia.fast_matrix(&p);
         assert_eq!(bia.memory.len(), before);
+    }
+
+    #[test]
+    fn adaptive_realm_mask_changes_with_event_distribution() {
+        let a = [30000, 1000, 1000, 1000, 1000];
+        let b = [1000, 1000, 30000, 1000, 1000];
+        let wa = adaptive_realm_weights(a, RealmBand::Mixed);
+        let wb = adaptive_realm_weights(b, RealmBand::Mixed);
+        assert!(wa[0] > wb[0]);
+        assert!(wb[2] > wa[2]);
+    }
+
+    #[test]
+    fn duyen_token_feedback_changes_recurrent_state() {
+        let mut decoder = DuyenTokenDecoder::default();
+        let before = decoder.state();
+        let seq = decoder.generate("Mở YouTube", 8);
+        assert!(!seq.tokens.is_empty());
+        assert_ne!(decoder.state(), before);
+    }
+
+    #[test]
+    fn v11_evaluation_meets_acceptance_thresholds() {
+        let report = run_v11_evaluation();
+        assert!(report.passed(), "report={report:?}");
+        assert_eq!(report.determinism_passes, report.cases);
     }
 
 }

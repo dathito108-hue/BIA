@@ -99,7 +99,7 @@ impl FourMatrixKernel {
         input: AggregateVector,
         realm: RealmBand,
     ) -> FourMatrixOutput {
-        let masked = AggregateVector::from_array(realm_mask(input.as_array(), realm));
+        let masked = AggregateVector::from_array(adaptive_realm_mask(input.as_array(), realm));
         let conditioned = AggregateVector::from_array(self.update_dependent(masked.as_array()));
         let projected = project(conditioned.as_array());
         let zeroed = AggregateVector::from_array(zero_state(
@@ -207,17 +207,34 @@ pub fn classify_realm(text: &str) -> RealmBand {
     }
 }
 
-fn realm_mask(
+pub fn adaptive_realm_weights(
     input: [i16; AGGREGATES],
     realm: RealmBand,
 ) -> [i16; AGGREGATES] {
-    // Keep every channel non-zero so safety/context is never fully discarded.
-    let weights = match realm {
+    let base = match realm {
         RealmBand::Embodied => [32767, 28672, 24576, 24576, 28672],
         RealmBand::Mixed => [24576, 24576, 28672, 28672, 28672],
         RealmBand::Abstract => [4096, 12288, 32767, 32767, 32767],
     };
 
+    let total = input.iter().map(|v| v.unsigned_abs() as i32).sum::<i32>().max(1);
+    let mut weights = base;
+    for i in 0..AGGREGATES {
+        let share_q15 = ((input[i].unsigned_abs() as i32 * Q) / total).clamp(0, Q);
+        // Up to +12.5% adaptive gain for a channel strongly represented in this event.
+        let bonus = share_q15 / 8;
+        weights[i] = sat_i16((base[i] as i32 + bonus).min(Q));
+        // Never fully mask a channel; minimum keeps contradictory/safety evidence available.
+        weights[i] = weights[i].max(2048);
+    }
+    weights
+}
+
+fn adaptive_realm_mask(
+    input: [i16; AGGREGATES],
+    realm: RealmBand,
+) -> [i16; AGGREGATES] {
+    let weights = adaptive_realm_weights(input, realm);
     let mut out = [0i16; AGGREGATES];
     for i in 0..AGGREGATES {
         out[i] = qmul(input[i], weights[i]);
