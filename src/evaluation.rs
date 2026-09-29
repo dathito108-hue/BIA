@@ -610,7 +610,7 @@ pub fn run_v18_open_reasoning_evaluation() -> V18OpenReasoningReport {
         }
 
         let conflict_text = format!(
-            "{a} gây ra {c}. {d} ngăn {c}. {a} có gây ra {c} không?"
+            "{a} gây ra {c}. {a} gây ra {d}. {d} ngăn {c}. {a} có gây ra {c} không?"
         );
         let mut conflict_world = WorldGraph::new(128, 256);
         let conflict_scene =
@@ -754,15 +754,18 @@ pub fn run_v21_deep_intelligence_evaluation() -> V21DeepIntelligenceReport {
             induction += 1;
         }
 
+        // Isolate composition from the direct canonical -> target edge used
+        // in the earlier analogy case, while retaining the learned alias.
+        let mut composition_world = WorldGraph::new(256, 512);
         let scene = intelligence.learn(
-            &mut world,
+            &mut composition_world,
             &format!(
                 "{canonical} gây ra {middle}. {middle} dẫn đến {target}. {alias} có gây ra {target} không?"
             ),
             i as u64 * 100 + 4,
         );
         if matches!(
-            intelligence.answer_scene(&world, &scene),
+            intelligence.answer_scene(&composition_world, &scene),
             OpenAnswer::Supported { path, .. } if path.len() >= 3
         ) {
             compositional += 1;
@@ -2009,7 +2012,10 @@ pub fn run_v101_autonomous_loop_evaluation() -> V101AutonomousLoopReport {
         if result.passes <= 4
             && result.stopped_bounded
             && result.internal_questions <= 8
-            && result.resolved_questions <= result.internal_questions
+            && result.resolved_questions == 0
+            && result.decision == LoopDecision::GatherEvidence
+            && result.final_confidence <= conflicted.certainty
+            && result.critique == AnswerCritic.critique(&conflict_answer, 0.45, 2)
         {
             loop_ok += 1;
         }

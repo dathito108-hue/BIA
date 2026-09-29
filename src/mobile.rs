@@ -11,7 +11,6 @@ use crate::knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
 use crate::language::VietnameseGate;
 use crate::open_intelligence::OpenIntelligence;
 use crate::open_reasoning::OpenAnswer;
-use crate::semantic::concept_id;
 use crate::autonomous_cognitive_loop::{CognitiveLoopInput, LoopDecision};
 use crate::idle_cognition::IdleCognitiveTask;
 use crate::token_stream::{InstantToken, InstantTokenEmitter};
@@ -149,13 +148,11 @@ impl OfflineMobileBia {
 
         let pending = self.queue.front().cloned();
 
-        let mut reply = if semantic_scene.query.is_some()
-            && !matches!(semantic_answer, OpenAnswer::Unknown)
-        {
+        let mut reply = if let Some(query) = &semantic_scene.query {
             let (support, opposition, path_len, evidence_count) =
                 answer_metrics(&semantic_answer);
             let cycle_input = CognitiveLoopInput {
-                target: concept_id(text),
+                target: query.object.id,
                 support,
                 opposition,
                 path_len,
@@ -165,6 +162,13 @@ impl OfflineMobileBia {
             let cycle = self
                 .intelligence
                 .autonomous_cycle(&semantic_answer, &cycle_input);
+            // Rendering must respect the critic's cap, including a Hold verdict.
+            match &mut semantic_answer {
+                OpenAnswer::Supported { confidence, .. } | OpenAnswer::Opposed { confidence, .. } => {
+                    *confidence = confidence.min(cycle.final_confidence);
+                }
+                _ => {}
+            }
             let adjusted_uncertainty =
                 (1.0 - cycle.final_confidence).clamp(0.0, 1.0);
             let mut thought = self
@@ -452,10 +456,10 @@ fn action_features(action: &DeviceAction) -> Vec<f32> {
 fn answer_metrics(answer: &OpenAnswer) -> (f32, f32, usize, usize) {
     match answer {
         OpenAnswer::Supported { confidence, path } => {
-            (*confidence, 0.0, path.len().saturating_sub(1), path.len())
+            (*confidence, 0.0, path.len().saturating_sub(1), path.len().saturating_sub(1))
         }
         OpenAnswer::Opposed { confidence, path } => {
-            (0.0, *confidence, path.len().saturating_sub(1), path.len())
+            (0.0, *confidence, path.len().saturating_sub(1), path.len().saturating_sub(1))
         }
         OpenAnswer::Contradicted { support, opposition } => {
             (*support, *opposition, 2, 2)
