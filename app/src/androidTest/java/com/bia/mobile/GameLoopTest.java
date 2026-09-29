@@ -58,8 +58,15 @@ public final class GameLoopTest extends InstrumentationTestCase {
             Thread.sleep(150);
         }
         waitFor(()->GameCaptureService.instance!=null && GameCaptureService.instance.latest!=null && GameTrainingActivity.visible,10000,"projection frames in arena");
-        waitFor(()->{clickOnce("Got it");return GameAccessibilityService.instance.targetForeground();},10000,"arena is the active window");
-        Thread.sleep(350); // Flush the tutorial/window transition before a new grant.
+        // Android posts its first fullscreen tutorial asynchronously, after the arena
+        // is already the active window. Require a stable window across that delay.
+        long stableSince=SystemClock.elapsedRealtime(),readyUntil=stableSince+12000;
+        while(SystemClock.elapsedRealtime()<readyUntil){
+            if(clickOnce("Got it") || !GameAccessibilityService.instance.targetForeground())stableSince=SystemClock.elapsedRealtime();
+            if(SystemClock.elapsedRealtime()-stableSince>=3000)break;
+            Thread.sleep(100);
+        }
+        assertTrue("arena stable after fullscreen tutorial",SystemClock.elapsedRealtime()-stableSince>=3000);
         waitFor(()->GameCaptureService.instance.latest!=null && SystemClock.elapsedRealtime()-GameCaptureService.instance.latest.time<350,5000,"fresh arena frame");
         click("Bật 5 phút",5000);
         return GameAccessibilityService.instance;
