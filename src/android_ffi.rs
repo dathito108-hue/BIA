@@ -295,6 +295,34 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeGeneralizeV16(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeOpenReasoningV18(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let report = crate::run_v18_open_reasoning_evaluation();
+    java_string(
+        &mut env,
+        format!(
+            "V18 open reasoning: pass={}, cases={}, parse={}/{}, composition={}/{}, counterfactual={}/{}, contradiction={}/{}, paraphrase={}/{}, accuracy={:.3}, elapsed_us={}",
+            report.passed(),
+            report.cases,
+            report.parse_passes,
+            report.cases,
+            report.composition_passes,
+            report.cases,
+            report.counterfactual_passes,
+            report.cases,
+            report.contradiction_passes,
+            report.cases,
+            report.paraphrase_passes,
+            report.cases,
+            report.accuracy(),
+            report.elapsed.as_micros()
+        ),
+    )
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
