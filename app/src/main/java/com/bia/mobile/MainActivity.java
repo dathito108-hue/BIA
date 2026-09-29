@@ -61,6 +61,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     public static native String nativeBenchmarkV12(int iterations);
     public static native String nativeStressV14(int iterations);
     public static native String nativeReasoningV15();
+    public static native String nativeGeneralizeV16();
     public static native long nativeCycleCount();
     public static native String nativeStatus();
     public static native boolean nativeSave(String path);
@@ -455,6 +456,18 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     refreshStatus();
                 });
             }, "bia-reasoning-proof").start();
+            return;
+        }
+
+        if (text.equalsIgnoreCase("/generalize") || text.equalsIgnoreCase("generalize")) {
+            new Thread(() -> {
+                String report = nativeGeneralizeV16();
+                runOnUiThread(() -> {
+                    lastReply = report;
+                    addBubble(report, false);
+                    refreshStatus();
+                });
+            }, "bia-generalization-proof").start();
             return;
         }
 
