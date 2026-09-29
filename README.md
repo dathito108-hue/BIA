@@ -148,3 +148,16 @@ V11 moves the instant output path from a fixed discourse-word emitter to a recur
 ### What V11 proves — and what it does not
 
 The automated evidence demonstrates that the current bounded task set is executable, deterministic, resource-bounded and fast on the GitHub Actions x86_64 runner, while the same Rust core cross-compiles into the ARM64 Android APK. It does **not** prove open-domain language quality or phone-specific latency; those require a device benchmark and a broader held-out corpus.
+
+
+## Inference V12 — Mobile Proof + Open Vocabulary
+
+V12 extends the recurrent Duyên-token path in two measurable directions:
+
+- **Bounded learned vocabulary:** up to 128 learned word-tokens can be acquired from provenance-backed content already ingested by BIA.
+- **Dynamic emission:** learned tokens can participate in generation after the first constrained control tokens.
+- **Held-out Vietnamese evaluation:** V12 adds prompts not used by the V11 acceptance set.
+- **On-device benchmark:** type `/bench` or `benchmark` in the Android app to execute the native decoder repeatedly on the actual phone and report elapsed time, ns/token, tokens/s and learned-vocabulary size.
+- **CI benchmark:** release CI still protects against accidental complexity growth on x86_64.
+
+The Android benchmark is the authoritative device-specific speed measurement. CI throughput must not be presented as phone throughput.
