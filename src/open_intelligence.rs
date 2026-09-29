@@ -4,12 +4,16 @@ use crate::budget::DeviceState;
 use crate::calibration::SelfCalibration;
 use crate::autonomous_hypothesis::AutonomousHypothesisGenerator;
 use crate::competition::{CandidateHypothesis, CompetitionResult, HypothesisCompetition};
+use crate::concept_composition::ConceptComposer;
+use crate::continual_semantics::ContinualSemanticLearner;
 use crate::discovery::ContextDiscovery;
 use crate::episodic::EpisodicMemory;
 use crate::analogy::AnalogicalReasoner;
+use crate::generative_cognition::{GeneratedThought, GenerativeCognition};
 use crate::hierarchy::HierarchicalAbstraction;
 use crate::hybrid_semantic::{HybridSemanticReasoner, LatentInference};
 use crate::latent_memory::LatentMemory;
+use crate::latent_symbol_bridge::LatentSymbolBridge;
 use crate::latent_relation::LatentRelationLearner;
 use crate::induction::{InducedRelation, InductiveReasoner};
 use crate::knowledge_governor::{KnowledgeAssessment, KnowledgeGovernor};
@@ -22,6 +26,7 @@ use crate::skill_transfer::CrossDomainTransfer;
 use crate::rules::RuleSynthesizer;
 use crate::semantic::{concept_id, SemanticScene};
 use crate::semantic_compression::SemanticCompressor;
+use crate::semantic_consolidation::{ConsolidationReport, SemanticConsolidator};
 use crate::types::RelationKind;
 use crate::world::WorldGraph;
 
@@ -49,6 +54,11 @@ pub struct OpenIntelligence {
     latent_relations: LatentRelationLearner,
     hybrid: HybridSemanticReasoner,
     semantic_compressor: SemanticCompressor,
+    continual: ContinualSemanticLearner,
+    composer: ConceptComposer,
+    symbol_bridge: LatentSymbolBridge,
+    consolidator: SemanticConsolidator,
+    generator: GenerativeCognition,
 }
 
 impl OpenIntelligence {
@@ -61,7 +71,10 @@ impl OpenIntelligence {
                 self.hybrid.apply(world, &inference);
             }
         }
-        self.latent_memory.remember(concept_id(&canonical), &canonical, 0.85);
+        let canonical_id = concept_id(&canonical);
+        self.latent_memory.remember(canonical_id, &canonical, 0.85);
+        self.continual.observe(canonical_id, &canonical);
+        self.symbol_bridge.bind(canonical_id, &canonical, 0.85);
         let _ = self.semantic_compressor.observe(&canonical, 0.85);
         if scene.clauses.len() == 1 {
             let clause = &scene.clauses[0];
@@ -234,6 +247,26 @@ impl OpenIntelligence {
 
     pub fn semantic_cluster_count(&self) -> usize {
         self.semantic_compressor.len()
+    }
+
+    pub fn continual_similarity(&self, a: u64, b: u64) -> Option<f32> {
+        self.continual.similarity(a, b)
+    }
+
+    pub fn compose_similarity(&self, parts: &[&str], target: &str) -> Option<f32> {
+        self.composer.compositional_similarity(parts, target)
+    }
+
+    pub fn consolidate_semantics(&mut self, important_ids: &[u64]) -> ConsolidationReport {
+        self.consolidator.consolidate(&mut self.continual, important_ids)
+    }
+
+    pub fn nearest_symbol(&self, text: &str) -> Option<(crate::latent_symbol_bridge::SemanticSymbol, f32)> {
+        self.symbol_bridge.nearest_symbol(text)
+    }
+
+    pub fn generate_thought(&self, answer: &OpenAnswer, uncertainty: f32) -> GeneratedThought {
+        self.generator.render(answer, uncertainty)
     }
 
     pub fn analogy(&self) -> &AnalogicalReasoner {
