@@ -5,6 +5,7 @@ use crate::capability::{infer_device_action, DeviceAction, DeviceActionKind};
 use crate::continuity::{decode_continuity, encode_continuity, ContinuityState};
 use crate::core::BiaDca;
 use crate::dialogue::{DialogueContext, DialogueTurn, Speaker};
+use crate::duyen_token::DuyenTokenDecoder;
 use crate::goals::{GoalStack, GoalStatus};
 use crate::knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
 use crate::language::VietnameseGate;
@@ -27,6 +28,7 @@ pub struct OfflineMobileBia {
     pub goals: GoalStack,
     pub knowledge: KnowledgeLedger,
     pub tokens: InstantTokenEmitter,
+    pub decoder: DuyenTokenDecoder,
     queue: ActionQueue,
 }
 
@@ -40,6 +42,7 @@ impl OfflineMobileBia {
             goals: GoalStack::new(16),
             knowledge: KnowledgeLedger::new(96),
             tokens: InstantTokenEmitter::default(),
+            decoder: DuyenTokenDecoder::default(),
             queue: ActionQueue::new(12),
         }
     }
@@ -181,7 +184,16 @@ impl OfflineMobileBia {
     }
 
     pub fn immediate_tokens(&mut self, input: &str) -> Vec<InstantToken> {
-        self.tokens.emit_immediate(input)
+        let text = self.decoder.first_token(input);
+        vec![InstantToken {
+            text,
+            ordinal: 0,
+            final_token: false,
+        }]
+    }
+
+    pub fn duyen_generate(&mut self, input: &str, max_tokens: usize) -> String {
+        self.decoder.generate(input, max_tokens).tokens.join(" ")
     }
 
     pub fn response_tokens(
