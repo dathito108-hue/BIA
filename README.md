@@ -207,3 +207,18 @@ This block extends causal reasoning beyond the V15 training-shaped cases:
 - Android command `/generalize` runs the same proof natively.
 
 The counterfactual engine compares factual vs. "without X" support/opposition while keeping reasoning bounded. Passing the suite proves these structural generalization invariants only; it does not prove unrestricted open-domain reasoning.
+
+
+## Inference V18–V20 — Semantic Open Reasoning
+
+This block bridges natural Vietnamese text into BIA's causal intelligence:
+
+- **Semantic Scene Parser:** extracts bounded entities, causal/enabling/inhibiting clauses and causal/counterfactual queries from Vietnamese text.
+- **Knowledge-to-Graph:** provenance-backed ingested documents are also parsed into the WorldGraph, so learned text can become causal structure rather than opaque memory.
+- **Semantic Retrieval:** when a query cannot be answered from the active graph, BIA retrieves relevant provenance records from KnowledgeLedger, rehydrates them into the graph and retries reasoning.
+- **Compositional Reasoning:** multi-sentence language chains can be composed into multi-hop causal answers.
+- **Counterfactual Questions:** supports bounded "nếu bỏ X thì Y?" reasoning using the V16–V17 engine.
+- **Contradiction Awareness:** conflicting textual causes remain explicit rather than being collapsed into a single forced answer.
+- **Android proof:** `/openproof` runs the open-reasoning evaluation natively.
+
+The parser is intentionally bounded and rule-guided. Passing the suite proves that BIA can turn a defined family of previously unseen Vietnamese causal sentences into graph reasoning; it does not prove unrestricted natural-language understanding.
