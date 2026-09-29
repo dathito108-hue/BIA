@@ -5,6 +5,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="solana-wallet" />
+        </intent>
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
@@ -17,6 +22,7 @@
     <application
         android:allowBackup="true"
         android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:icon="@drawable/ic_bia"
         android:label="BIA"
         android:supportsRtl="true"
@@ -26,6 +32,7 @@
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/game_accessibility" />
         </service>
+        <activity android:name=".SolanaActivity" android:exported="false" />
         <activity android:name=".DexActivity" android:exported="false" />
         <activity android:name=".TradingActivity" android:exported="false" />
         <activity android:name=".GameSetupActivity" android:exported="false" android:screenOrientation="landscape" />
