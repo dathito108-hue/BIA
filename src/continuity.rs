@@ -143,9 +143,29 @@ fn default_label(kind: DeviceActionKind, payload: &str) -> String {
 }
 
 fn escape(s: &str) -> String {
-    s.replace('\\', "\\\\").replace('\t', "\\t").replace('\n', "\\n")
+    s.replace('\\', "\\\\")
+        .replace('\t', "\\t")
+        .replace('\n', "\\n")
 }
 
 fn unescape(s: &str) -> String {
-    s.replace("\\n", "\n").replace("\\t", "\t").replace("\\\\", "\\")
+    let mut chars = s.chars();
+    let mut out = String::new();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some('n') => out.push('\n'),
+                Some('t') => out.push('\t'),
+                Some('\\') => out.push('\\'),
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+                None => out.push('\\'),
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }

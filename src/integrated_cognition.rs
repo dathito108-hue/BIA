@@ -52,11 +52,34 @@ pub struct IntegratedCognition {
     journal: Vec<String>,
     topic: Option<String>,
     last_plan: Option<(String, String)>,
+    bindings: Vec<(String, crate::capability::DeviceAction)>,
+    execution_failures: Vec<String>,
 }
 
 impl IntegratedCognition {
     /// Returns None for ordinary chat so the existing BIA pipeline remains canonical.
     pub fn handle(&mut self, input: &str) -> Option<String> {
+        // Preserve exact Unicode, case and punctuation in Android payloads.
+        if let Some((head, payload)) = input.split_once(':') {
+            if let Some(name) = normalize(head).trim().strip_prefix("gan thao tac ") {
+                if self.journal.len() >= MAX_JOURNAL || input.chars().count() > MAX_INPUT {
+                    return Some("Đã đạt giới hạn; chưa gắn thao tác.".into());
+                }
+                if !self.skills.iter().any(|skill| skill.name == name) {
+                    return Some("Hãy khai báo kỹ năng trước khi gắn thao tác.".into());
+                }
+                let Some(action) = crate::skill_execution::parse_binding(payload.trim()) else {
+                    return Some("Thao tác chưa được hỗ trợ. Chỉ gắn mở cài đặt, URL HTTP(S), tìm web, mở gói ứng dụng hoặc sao chép.".into());
+                };
+                if let Some(binding) = self.bindings.iter_mut().find(|b| b.0 == name) {
+                    binding.1 = action;
+                } else {
+                    self.bindings.push((name.to_string(), action));
+                }
+                self.journal.push(input.to_string());
+                return Some("Đã gắn thao tác cụ thể. Khi chạy, bạn sẽ thấy nội dung từng bước để phê duyệt.".into());
+            }
+        }
         let folded = input
             .split("->")
             .map(normalize)
@@ -215,6 +238,7 @@ impl IntegratedCognition {
             if success {
                 skill.successes = skill.successes.saturating_add(1);
                 skill.blocked = false;
+                self.execution_failures.retain(|n| n != name);
             } else {
                 skill.failures = skill.failures.saturating_add(1);
                 skill.blocked = true;
@@ -449,6 +473,67 @@ impl IntegratedCognition {
         format!("Kế hoạch mô phỏng: {}. Đạt mục tiêu trong mô hình đã khai báo; chưa thực thi trên thiết bị.", names.join(" → "))
     }
 
+    pub fn executable_skill(&self, name: &str) -> Option<crate::capability::DeviceAction> {
+        let name = normalize(name).trim().to_string();
+        self.skills.iter().find(|s| s.name == name && !s.blocked)?;
+        self.bindings
+            .iter()
+            .find(|b| b.0 == name)
+            .map(|b| b.1.clone())
+    }
+
+    pub fn executable_plan(
+        &self,
+        input: &str,
+    ) -> Option<Vec<(String, crate::capability::DeviceAction)>> {
+        let (start, goal) = input.split_once("->")?;
+        let (start, goal) = (normalize(start), normalize(goal));
+        let mut model = WorldModel::default();
+        for skill in self
+            .skills
+            .iter()
+            .filter(|s| !s.blocked && self.bindings.iter().any(|b| b.0 == s.name))
+        {
+            model.add_transition(TransitionModel {
+                action: concept_id(&skill.name),
+                requires: skill.requires.clone(),
+                adds: skill.adds.clone(),
+                removes: Vec::new(),
+                utility: 0.0,
+                cost: 0.1,
+                confidence: 0.8,
+            });
+        }
+        let plan = DeliberativePlanner.plan(
+            &model,
+            &SimState::new(facts(start.trim())?),
+            &goal_facts(goal.trim())?,
+        )?;
+        if !plan.reached_goal || plan.actions.is_empty() {
+            return None;
+        }
+        plan.actions
+            .iter()
+            .map(|id| {
+                let skill = self.skills.iter().find(|s| concept_id(&s.name) == *id)?;
+                Some((skill.name.clone(), self.executable_skill(&skill.name)?))
+            })
+            .collect()
+    }
+
+    /// Adapter failures have a separate bounded slot per skill, even when the user journal is full.
+    pub fn record_execution_failure(&mut self, name: &str) -> bool {
+        let Some(skill) = self.skills.iter_mut().find(|s| s.name == name) else {
+            return false;
+        };
+        if !self.execution_failures.iter().any(|n| n == name) {
+            self.execution_failures.push(name.into());
+            skill.failures = skill.failures.saturating_add(1);
+        }
+        skill.blocked = true;
+        true
+    }
+
     pub fn journal_len(&self) -> usize {
         self.journal.len()
     }
@@ -456,6 +541,11 @@ impl IntegratedCognition {
         self.journal
             .iter()
             .map(|line| format!("J131\t{}", hex(line.as_bytes())))
+            .chain(
+                self.execution_failures
+                    .iter()
+                    .map(|name| format!("B132\t{}", hex(name.as_bytes()))),
+            )
             .collect::<Vec<_>>()
             .join("\n")
     }
@@ -476,6 +566,17 @@ impl IntegratedCognition {
             };
             let before = next.journal.len();
             if next.handle(&command).is_none() || next.journal.len() != before + 1 {
+                return false;
+            }
+        }
+        for line in text.lines().filter_map(|l| l.strip_prefix("B132\t")) {
+            let Some(name) = unhex(line) else {
+                return false;
+            };
+            if next.execution_failures.len() >= MAX_SKILLS
+                || next.execution_failures.contains(&name)
+                || !next.record_execution_failure(&name)
+            {
                 return false;
             }
         }
@@ -517,10 +618,10 @@ fn goal_facts(text: &str) -> Option<GoalSpec> {
         },
     })
 }
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
-fn unhex(text: &str) -> Option<String> {
+pub(crate) fn unhex(text: &str) -> Option<String> {
     if text.len() > MAX_INPUT * 8 || !text.len().is_multiple_of(2) || !text.is_ascii() {
         return None;
     }

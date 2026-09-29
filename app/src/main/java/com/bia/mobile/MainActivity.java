@@ -42,6 +42,8 @@ import java.util.Locale;
 
 public class MainActivity extends Activity implements TextToSpeech.OnInitListener {
     private static final int REQ_SPEECH = 97;
+    private final Object executionLock = new Object();
+    private boolean actionDialogOpen;
     private static final int REQ_DOCUMENT = 98;
 
     static {
@@ -78,7 +80,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     public static native boolean nativeSave(String path);
     public static native boolean nativeLoad(String path);
     public static native String nativePendingAction();
-    public static native void nativeResolveAction(boolean success, long timestamp);
+    public static native boolean nativeClaimAction(String id);
+    public static native boolean nativeCompleteAction(String id, boolean success, long timestamp);
+    public static native boolean nativeCancelAction(String id);
     public static native String nativeExportContinuity();
     public static native boolean nativeImportContinuity(String state);
     public static native int nativeIngestContent(
@@ -632,14 +636,17 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         voiceTurn = false;
 
         new Thread(() -> {
-            String reply = nativeChat(
+            String reply;
+            synchronized (executionLock) {
+                reply = nativeChat(
                     text,
                     SystemClock.elapsedRealtime(),
                     battery,
                     thermal,
                     load,
                     memoryMb
-            );
+                );
+            }
 
             runOnUiThread(() -> {
                 lastReply = reply;
@@ -674,43 +681,56 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     private void handlePendingAction() {
+        if (actionDialogOpen || isFinishing()) return;
         String encoded = nativePendingAction();
         if (encoded == null || encoded.isEmpty()) return;
-
         String[] parts = encoded.split("\t", -1);
-        if (parts.length < 4) return;
-
+        if (parts.length != 4) return;
         String kind = parts[0];
         String label = unescape(parts[1]);
         String payload = unescape(parts[2]);
-
-        new AlertDialog.Builder(this)
-                .setTitle("BIA đề xuất bước kế tiếp")
-                .setMessage(
-                        label
-                                + "\n\nMỗi bước trong hàng đợi đều cần bạn xác nhận riêng."
-                )
-                .setNegativeButton("Dừng", (dialog, which) -> {
-                    nativeResolveAction(false, SystemClock.elapsedRealtime());
-                    lastReply = "Chuỗi hành động đã dừng. Tôi đã ghi nhận kết quả.";
-                    addBubble(lastReply, false);
-                    persistAll();
-                    refreshStatus();
-                })
-                .setPositiveButton("Thực thi", (dialog, which) -> {
-                    boolean success = executeAction(kind, payload);
-                    nativeResolveAction(success, SystemClock.elapsedRealtime());
-                    lastReply = success
-                            ? "Bước đã hoàn thành và kết quả đã được huân tập."
-                            : "Bước thất bại; tôi đã ghi nhận để điều chỉnh.";
-                    addBubble(lastReply, false);
-                    persistAll();
-                    refreshStatus();
-                    if (success && !nativePendingAction().isEmpty()) {
-                        handlePendingAction();
+        String id = parts[3];
+        actionDialogOpen = true;
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Duyệt bước thực thi của BIA")
+                .setMessage(label + "\n\nNội dung: " + payload
+                        + "\n\nChỉ bước này được phép chạy. Mở ứng dụng/URL chỉ xác nhận hệ điều hành tiếp nhận.")
+                .setNegativeButton("Dừng", (d, which) -> {
+                    synchronized (executionLock) {
+                        boolean cancelled = nativeCancelAction(id);
+                        lastReply = cancelled ? "Đã dừng; không coi việc từ chối là kỹ năng thất bại."
+                                : "Bước đã thay đổi hoặc chưa rõ kết quả; kiểm tra Trạng thái thực thi.";
+                        persistAll();
                     }
+                    addBubble(lastReply, false);
+                    refreshStatus();
                 })
-                .show();
+                .setPositiveButton("Thực thi", (d, which) -> {
+                    boolean continueQueue = false;
+                    synchronized (executionLock) {
+                        if (!nativeClaimAction(id)) {
+                            lastReply = "Không chạy: bước đã thay đổi, đang chạy hoặc kết quả chưa xác định. Kiểm tra thiết bị rồi dùng Hủy thực thi nếu cần.";
+                        } else if (!saveContinuity(nativeExportContinuity())) {
+                            // No side effect occurred. Keep the claim blocked in RAM.
+                            lastReply = "Không chạy vì chưa lưu được trạng thái an toàn.";
+                        } else {
+                            boolean success = executeAction(kind, payload);
+                            boolean accepted = nativeCompleteAction(id, success, SystemClock.elapsedRealtime());
+                            boolean saved = saveContinuity(nativeExportContinuity());
+                            lastReply = !accepted || !saved ? "Kết quả chưa được lưu đầy đủ; dừng chuỗi để kiểm tra."
+                                    : success ? (kind.equals("CLIPBOARD_WRITE") ? "Đã kiểm tra nội dung clipboard."
+                                    : "Hệ điều hành đã tiếp nhận thao tác. Chưa xác minh công việc bên trong ứng dụng.")
+                                    : "Thao tác thất bại; đã dừng chuỗi và ghi nhận để lập kế hoạch lại.";
+                            continueQueue = accepted && saved && success;
+                        }
+                    }
+                    addBubble(lastReply, false);
+                    refreshStatus();
+                    if (continueQueue) getWindow().getDecorView().post(this::handlePendingAction);
+                })
+                .create();
+        dialog.setOnDismissListener(d -> actionDialogOpen = false);
+        dialog.show();
     }
 
     private boolean executeAction(String kind, String payload) {
@@ -720,6 +740,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     startActivity(new Intent(Settings.ACTION_SETTINGS));
                     return true;
                 case "OPEN_URL":
+                    if (!(payload.startsWith("https://") || payload.startsWith("http://"))) return false;
                     startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(payload)));
                     return true;
                 case "SEARCH_WEB":
@@ -753,7 +774,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     clipboard.setPrimaryClip(
                             ClipData.newPlainText("BIA", payload)
                     );
-                    return true;
+                    ClipData readBack = clipboard.getPrimaryClip();
+                    return readBack != null && readBack.getItemCount() > 0
+                            && payload.contentEquals(readBack.getItemAt(0).coerceToText(this));
                 default:
                     return false;
             }
@@ -794,31 +817,60 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     private boolean loadContinuity() {
         File file = new File(continuityPath);
-        if (!file.exists()) return false;
-        try (FileInputStream in = new FileInputStream(file)) {
-            byte[] bytes = new byte[(int) Math.min(file.length(), 1024 * 1024)];
-            int n = in.read(bytes);
-            if (n <= 0) return false;
-            String state = new String(bytes, 0, n, StandardCharsets.UTF_8);
+        try (FileInputStream in = new android.util.AtomicFile(file).openRead()) {
+            ByteArrayOutputStream data = new ByteArrayOutputStream();
+            byte[] buffer = new byte[4096];
+            int n;
+            while ((n = in.read(buffer)) != -1) {
+                if (data.size() + n > 1024 * 1024) return false;
+                data.write(buffer, 0, n);
+            }
+            String state = new String(data.toByteArray(), StandardCharsets.UTF_8);
             return nativeImportContinuity(state);
         } catch (Exception e) {
             return false;
         }
     }
 
-    private void saveContinuity(String state) {
-        try (FileOutputStream out = new FileOutputStream(continuityPath, false)) {
+    private boolean saveContinuity(String state) {
+        android.util.AtomicFile file = new android.util.AtomicFile(new File(continuityPath));
+        FileOutputStream out = null;
+        try {
+            out = file.startWrite();
             out.write(state.getBytes(StandardCharsets.UTF_8));
             out.flush();
-        } catch (Exception ignored) {
+            out.getFD().sync();
+            file.finishWrite(out);
+            // AtomicFile logs some rename failures instead of throwing: verify the committed bytes.
+            try (FileInputStream committed = file.openRead()) {
+                ByteArrayOutputStream data = new ByteArrayOutputStream();
+                byte[] buffer = new byte[4096];
+                int n;
+                while ((n = committed.read(buffer)) != -1) {
+                    if (data.size() + n > 1024 * 1024) return false;
+                    data.write(buffer, 0, n);
+                }
+                return java.util.Arrays.equals(data.toByteArray(), state.getBytes(StandardCharsets.UTF_8));
+            }
+        } catch (Exception error) {
+            if (out != null) file.failWrite(out);
+            return false;
         }
     }
 
     private String unescape(String value) {
-        return value
-                .replace("\\n", "\n")
-                .replace("\\t", "\t")
-                .replace("\\\\", "\\");
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == '\\' && i + 1 < value.length()) {
+                char next = value.charAt(++i);
+                if (next == 'n') out.append('\n');
+                else if (next == 't') out.append('\t');
+                else if (next == '\\') out.append('\\');
+                else { out.append('\\'); out.append(next); }
+            } else out.append(c);
+        }
+        return out.toString();
     }
 
     private void refreshStatus() {

@@ -30,6 +30,7 @@ pub mod duyen_token;
 pub mod episodic;
 pub mod evidence_search;
 pub mod integrated_cognition;
+pub mod skill_execution;
 pub mod integrated_evaluation;
 pub mod evidence_evaluation;
 pub mod evaluation;

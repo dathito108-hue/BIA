@@ -19,7 +19,7 @@ impl ActionQueue {
 
     pub fn push(&mut self, action: DeviceAction) {
         if self.items.len() >= self.capacity {
-            self.items.pop_front();
+            return;
         }
         self.items.push_back(action);
     }
