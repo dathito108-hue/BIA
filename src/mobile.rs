@@ -12,7 +12,7 @@ use crate::language::VietnameseGate;
 use crate::open_intelligence::OpenIntelligence;
 use crate::open_reasoning::OpenAnswer;
 use crate::semantic::concept_id;
-use crate::autonomous_cognitive_loop::LoopDecision;
+use crate::autonomous_cognitive_loop::{CognitiveLoopInput, LoopDecision};
 use crate::idle_cognition::IdleCognitiveTask;
 use crate::token_stream::{InstantToken, InstantTokenEmitter};
 use crate::planner::decompose_goal;
@@ -154,15 +154,17 @@ impl OfflineMobileBia {
         {
             let (support, opposition, path_len, evidence_count) =
                 answer_metrics(&semantic_answer);
-            let cycle = self.intelligence.autonomous_cycle(
-                concept_id(text),
-                &semantic_answer,
+            let cycle_input = CognitiveLoopInput {
+                target: concept_id(text),
                 support,
                 opposition,
                 path_len,
                 evidence_count,
-                moment.uncertainty,
-            );
+                uncertainty: moment.uncertainty,
+            };
+            let cycle = self
+                .intelligence
+                .autonomous_cycle(&semantic_answer, &cycle_input);
             let adjusted_uncertainty =
                 (1.0 - cycle.final_confidence).clamp(0.0, 1.0);
             let mut thought = self
