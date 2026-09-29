@@ -73,7 +73,7 @@ pub mod world_model;
 pub use abstraction::{ConceptAbstraction, ConceptGroup};
 pub use active_evidence::{ActiveEvidenceSeeker, EvidenceRequest, EvidenceRequestKind};
 pub use autonomous_hypothesis::AutonomousHypothesisGenerator;
-pub use autonomous_cognitive_loop::{AutonomousCognitiveLoop, CognitiveLoopResult, LoopDecision};
+pub use autonomous_cognitive_loop::{AutonomousCognitiveLoop, CognitiveLoopInput, CognitiveLoopResult, LoopDecision};
 pub use answer_critic::{AnswerCritic, AnswerCritique};
 pub use action::{ActionDecision, ActionProposal, Authority, CuTranPolicy};
 pub use analogy::{AnalogicalHypothesis, AnalogicalReasoner};
