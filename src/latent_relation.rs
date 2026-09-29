@@ -20,7 +20,8 @@ impl LatentRelationLearner {
         if !transferable(kind) {
             return;
         }
-        let vector = self.encoder.encode(text);
+        let view = relation_view(text);
+        let vector = self.encoder.encode(&view);
         if let Some(p) = self.prototypes.iter_mut().find(|p| p.kind == kind) {
             let rate = (1.0 / (p.examples.saturating_add(1).min(16) as f32)).max(0.08);
             p.vector.blend(&vector, rate);
@@ -38,7 +39,8 @@ impl LatentRelationLearner {
     }
 
     pub fn classify(&self, text: &str) -> Option<(RelationKind, f32)> {
-        let q = self.encoder.encode(text);
+        let view = relation_view(text);
+        let q = self.encoder.encode(&view);
         let mut best: Option<(RelationKind, f32)> = None;
         for p in &self.prototypes {
             if p.examples < 2 {
@@ -67,4 +69,17 @@ fn transferable(kind: RelationKind) -> bool {
         kind,
         RelationKind::Causes | RelationKind::Enables | RelationKind::Inhibits
     )
+}
+
+
+fn relation_view(text: &str) -> String {
+    let normalized = crate::semantic::normalize(text);
+    let words: Vec<&str> = normalized.split_whitespace().collect();
+    if words.len() <= 2 {
+        return normalized;
+    }
+    if words.len() == 3 {
+        return words[1].to_string();
+    }
+    words[1..words.len() - 1].join(" ")
 }
