@@ -39,7 +39,7 @@ pub use continuity::{decode_continuity, encode_continuity, ContinuityState};
 pub use core::{BiaDca, BiaDcaConfig};
 pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
-pub use evaluation::{run_v11_evaluation, V11Report};
+pub use evaluation::{run_v11_evaluation, run_v12_evaluation, V11Report, V12Report};
 pub use four_matrix::{
     adaptive_realm_weights, classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
     FourMatrixOutput, PerspectiveProjection, RealmBand, AGGREGATES,
@@ -670,6 +670,24 @@ mod tests {
         let report = run_v11_evaluation();
         assert!(report.passed(), "report={report:?}");
         assert_eq!(report.determinism_passes, report.cases);
+    }
+
+    #[test]
+    fn learned_vocab_is_bounded_and_emittable() {
+        let mut decoder = DuyenTokenDecoder::default();
+        for i in 0..200 {
+            let _ = decoder.learn_text(&format!("term{i}"));
+        }
+        assert_eq!(decoder.learned_vocab_len(), 128);
+        let seq = decoder.generate("Phân tích kiến trúc mới", 32);
+        assert!(seq.tokens.iter().any(|t| t.starts_with("term")));
+    }
+
+    #[test]
+    fn v12_held_out_and_dynamic_vocab_meet_thresholds() {
+        let report = run_v12_evaluation();
+        assert!(report.passed(), "report={report:?}");
+        assert_eq!(report.determinism_passes, report.held_out_cases);
     }
 
 }
