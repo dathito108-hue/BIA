@@ -58,7 +58,7 @@ jobs:
         run: |
           sudo chmod 666 /dev/kvm
 
-      - name: Game loop on Android emulator
+      - name: Android game and live market integration
         if: github.event_name == 'pull_request'
         uses: reactivecircus/android-emulator-runner@v2
         with:

@@ -869,3 +869,19 @@ pub extern "system" fn Java_com_bia_mobile_GameNative_observe(
     }
     array.into_raw()
 }
+
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_TradingNative_analyze(
+    mut env: JNIEnv, _class:JClass, candles:jni::objects::JDoubleArray,
+    price:jni::sys::jdouble, event_ms:jlong, now_ms:jlong, connected:jboolean,
+)->jstring {
+    let length=env.get_array_length(&candles).unwrap_or(0);
+    let value=if length>0 && length<=600 && length%5==0 && event_ms>=0 && now_ms>0 {
+        let mut data=vec![0.0;length as usize];
+        if env.get_double_array_region(&candles,0,&mut data).is_err(){"CHẶN PHÂN TÍCH: lỗi dữ liệu JNI".into()}else{
+            let bars:Vec<_>=data.chunks_exact(5).map(|v|crate::trading_live::Candle{close_ms:if v[0].is_finite() && v[0]>0.0 {v[0] as u64}else{0},open:v[1],high:v[2],low:v[3],close:v[4]}).collect();
+            crate::trading_live::analyze(&bars,price,event_ms as u64,now_ms as u64,connected!=0).text()
+        }
+    }else{"CHẶN PHÂN TÍCH: đang chờ nến từ nguồn".into()};
+    java_string(&mut env,value)
+}
