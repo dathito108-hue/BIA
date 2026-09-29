@@ -27,6 +27,7 @@ pub mod mobile;
 pub mod open_reasoning;
 pub mod persistence;
 pub mod reasoning;
+pub mod retrieval;
 pub mod semantic;
 pub mod runtime;
 pub mod token_stream;
@@ -61,6 +62,7 @@ pub use mobile::{MobileReply, OfflineMobileBia};
 pub use open_reasoning::{OpenAnswer, SemanticReasoner};
 pub use persistence::{decode, encode, read_file, write_atomic, DharmaSnapshot, PersistenceError};
 pub use reasoning::{CausalPath, CausalReasoner, CounterfactualVerdict, ReasoningVerdict};
+pub use retrieval::{KnowledgeHit, SemanticRetriever};
 pub use semantic::{concept_id, QueryKind, SemanticClause, SemanticEntity, SemanticQuery, SemanticScene, VietnameseSemanticParser};
 pub use runtime::{CapacityTier, RuntimeProfile, RuntimeTarget};
 pub use token_stream::{InstantToken, InstantTokenEmitter};
@@ -874,6 +876,50 @@ mod tests {
         let report = run_v18_open_reasoning_evaluation();
         assert!(report.passed(), "report={report:?}");
         assert_eq!(report.accuracy(), 1.0);
+    }
+
+    #[test]
+    fn semantic_retrieval_recovers_relevant_provenance() {
+        let mut ledger = KnowledgeLedger::new(8);
+        ledger.add(KnowledgeRecord {
+            id: 1,
+            source: "doc-a".to_string(),
+            kind: ProvenanceKind::LocalDocument,
+            excerpt: "pin yếu gây ra giảm xung; giảm xung dẫn đến suy luận chậm".to_string(),
+            timestamp: 1,
+            confidence: 0.9,
+        });
+        ledger.add(KnowledgeRecord {
+            id: 2,
+            source: "doc-b".to_string(),
+            kind: ProvenanceKind::LocalDocument,
+            excerpt: "hoa sen nở vào buổi sáng".to_string(),
+            timestamp: 2,
+            confidence: 0.9,
+        });
+        let hits = SemanticRetriever.recall(&ledger, "pin yếu có gây suy luận chậm không", 2);
+        assert!(!hits.is_empty());
+        assert_eq!(hits[0].record.source, "doc-a");
+    }
+
+    #[test]
+    fn mobile_reasons_over_ingested_knowledge() {
+        let mut app = OfflineMobileBia::new(BiaDca::new(BiaDcaConfig::default()));
+        app.ingest_content(
+            "doc",
+            ProvenanceKind::LocalDocument,
+            "pin yếu gây ra giảm xung. giảm xung dẫn đến suy luận chậm.",
+            10,
+            0.95,
+        );
+        let reply = app
+            .converse(
+                "pin yếu có gây ra suy luận chậm không?",
+                20,
+                device(),
+            )
+            .expect("reply");
+        assert!(reply.text.contains("ủng hộ"));
     }
 
 }
