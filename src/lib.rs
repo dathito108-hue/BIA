@@ -370,4 +370,36 @@ mod tests {
         assert!(app.bia.cycle() > 0);
     }
 
+    #[test]
+    fn vietnamese_reply_is_human_readable_not_concept_ids() {
+        let bia = BiaDca::new(BiaDcaConfig::default());
+        let mut app = OfflineMobileBia::new(bia);
+        let reply = app
+            .converse("Xin chào", 1, device())
+            .expect("reply");
+        assert!(reply.text.contains("Tôi"));
+        assert!(!reply.text.contains("khái-niệm-"));
+    }
+
+    #[test]
+    fn restored_snapshot_keeps_native_world_and_memory() {
+        let mut bia = BiaDca::new(BiaDcaConfig::default());
+        let p = Phenomenon::new(
+            808,
+            WorldLevel::TrungThien,
+            SenseGate::Mind,
+            88,
+            vec![0.8, 0.08],
+            0.9,
+            0.7,
+            9,
+        );
+        bia.observe(p.clone());
+        bia.experience(&p, 8080, 0.9, 0.0);
+        let snapshot = decode(&encode(&bia.snapshot())).expect("snapshot");
+        let restored = BiaDca::from_snapshot(BiaDcaConfig::default(), snapshot);
+        assert!(restored.world.node(808).is_some());
+        assert_eq!(restored.memory.len(), 1);
+    }
+
 }
