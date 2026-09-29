@@ -192,3 +192,18 @@ V15 strengthens reasoning quality rather than raw throughput.
 - Android command `/reason` runs the reasoning-quality suite natively.
 
 The V15 suite uses synthetic causal graphs with known expected answers. Passing it proves these reasoning invariants, not general open-domain reasoning ability.
+
+
+## Inference V16–V17 — Generalization + Counterfactual Reasoning
+
+This block extends causal reasoning beyond the V15 training-shaped cases:
+
+- causal chains up to six nodes with bounded beam search;
+- strong unrelated distractor edges;
+- counterfactual queries by removing one causal condition without mutating durable world state;
+- reversal tests where new inhibiting evidence must overturn the current direction;
+- persistence checks after later unrelated world/memory additions;
+- 128 held-out synthetic causal worlds with known answers;
+- Android command `/generalize` runs the same proof natively.
+
+The counterfactual engine compares factual vs. "without X" support/opposition while keeping reasoning bounded. Passing the suite proves these structural generalization invariants only; it does not prove unrestricted open-domain reasoning.
