@@ -92,6 +92,7 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeClaimAction(
     mut env: JNIEnv,
     _class: JClass,
     id: JString,
+    timestamp: jlong,
 ) -> jboolean {
     let Some(id) = env
         .get_string(&id)
@@ -102,7 +103,7 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeClaimAction(
     };
     runtime()
         .lock()
-        .map(|mut app| u8::from(app.claim_device_action(id)))
+        .map(|mut app| u8::from(app.claim_approved_action(id, timestamp.max(0) as u64)))
         .unwrap_or(0)
 }
 #[no_mangle]
@@ -709,5 +710,91 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeLoad(
             1
         }
         Err(_) => 0,
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeApprovalSnapshot(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let value = runtime()
+        .lock()
+        .map(|app| app.approval_snapshot())
+        .unwrap_or_default();
+    java_string(&mut env, value)
+}
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeApproveExecution(
+    mut env: JNIEnv,
+    _class: JClass,
+    snapshot: JString,
+    mode: jint,
+    timestamp: jlong,
+) -> jboolean {
+    let mode = match mode {
+        1 => crate::execution_authority::ApprovalMode::Step,
+        2 => crate::execution_authority::ApprovalMode::Batch,
+        3 => crate::execution_authority::ApprovalMode::Session,
+        _ => return 0,
+    };
+    let Ok(snapshot) = env
+        .get_string(&snapshot)
+        .map(|s| s.to_string_lossy().into_owned())
+    else {
+        return 0;
+    };
+    runtime()
+        .lock()
+        .map(|mut app| u8::from(app.approve_execution(&snapshot, mode, timestamp.max(0) as u64)))
+        .unwrap_or(0)
+}
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeIsActionApproved(
+    mut env: JNIEnv,
+    _class: JClass,
+    id: JString,
+    timestamp: jlong,
+) -> jboolean {
+    let Some(id) = env
+        .get_string(&id)
+        .ok()
+        .and_then(|s| s.to_string_lossy().parse::<u64>().ok())
+    else {
+        return 0;
+    };
+    runtime()
+        .lock()
+        .map(|app| u8::from(app.execution_is_approved(id, timestamp.max(0) as u64)))
+        .unwrap_or(0)
+}
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeExecutionPermissionStatus(
+    mut env: JNIEnv,
+    _class: JClass,
+    timestamp: jlong,
+) -> jstring {
+    let value = runtime()
+        .lock()
+        .map(|app| app.execution_permission_status(timestamp.max(0) as u64))
+        .unwrap_or_default();
+    java_string(&mut env, value)
+}
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeStopAutomation(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    if let Ok(mut app) = runtime().lock() {
+        app.stop_automation();
+    }
+}
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeRevokeApproval(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    if let Ok(mut app) = runtime().lock() {
+        app.revoke_execution_approval();
     }
 }

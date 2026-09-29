@@ -31,7 +31,7 @@ impl SkillExecution {
     }
     pub fn prepare(&mut self, steps: Vec<(String, DeviceAction)>) -> Option<Vec<DeviceAction>> {
         if steps.is_empty()
-            || steps.len() > 4
+            || steps.len() > crate::execution_authority::MAX_BATCH
             || self.in_flight.is_some()
             || !self.skills.is_empty()
             || self.next_id + steps.len() as u64 > u32::MAX as u64
@@ -114,7 +114,7 @@ impl SkillExecution {
                 };
             } else if line.starts_with("S132\t") {
                 let p: Vec<_> = line.split('\t').collect();
-                if p.len() != 3 || state.skills.len() >= 4 {
+                if p.len() != 3 || state.skills.len() >= crate::execution_authority::MAX_BATCH {
                     return None;
                 }
                 let id = p[1].parse().ok()?;

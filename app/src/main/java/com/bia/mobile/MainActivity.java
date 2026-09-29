@@ -44,6 +44,11 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private static final int REQ_SPEECH = 97;
     private final Object executionLock = new Object();
     private boolean actionDialogOpen;
+    private boolean executionResumed;
+    private boolean awaitingExternalReturn;
+    private final android.os.Handler executionHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable executionPump = this::handlePendingAction;
+    private TextView executionStatus;
     private static final int REQ_DOCUMENT = 98;
 
     static {
@@ -80,7 +85,13 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     public static native boolean nativeSave(String path);
     public static native boolean nativeLoad(String path);
     public static native String nativePendingAction();
-    public static native boolean nativeClaimAction(String id);
+    public static native boolean nativeClaimAction(String id, long timestamp);
+    public static native String nativeApprovalSnapshot();
+    public static native boolean nativeApproveExecution(String snapshot, int mode, long timestamp);
+    public static native boolean nativeIsActionApproved(String id, long timestamp);
+    public static native String nativeExecutionPermissionStatus(long timestamp);
+    public static native void nativeStopAutomation();
+    public static native void nativeRevokeApproval();
     public static native boolean nativeCompleteAction(String id, boolean success, long timestamp);
     public static native boolean nativeCancelAction(String id);
     public static native String nativeExportContinuity();
@@ -134,6 +145,16 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
         root.addView(buildHeader());
         root.addView(buildStatusCard());
+        executionStatus = text("Tự duyệt: tắt", 12, MUTED, Typeface.NORMAL);
+        root.addView(executionStatus);
+        Button stopExecution = compactButton("Dừng chuỗi / Tắt tự duyệt");
+        stopExecution.setOnClickListener(v -> {
+            executionHandler.removeCallbacks(executionPump);
+            synchronized (executionLock) { nativeStopAutomation(); persistAll(); }
+            addBubble("Đã dừng các bước chưa chạy và thu hồi quyền tự duyệt. Bước chưa rõ kết quả được giữ để kiểm tra.", false);
+            refreshStatus();
+        });
+        root.addView(stopExecution);
 
         scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -178,13 +199,33 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        executionResumed = true;
+        awaitingExternalReturn = false;
+        scheduleExecution();
+    }
+
+    private void scheduleExecution() {
+        executionHandler.removeCallbacks(executionPump);
+        if (executionResumed && !awaitingExternalReturn && !isFinishing()) {
+            executionHandler.postDelayed(executionPump, 150);
+        }
+    }
+
+    @Override
     protected void onPause() {
+        executionResumed = false;
+        executionHandler.removeCallbacks(executionPump);
         persistAll();
         super.onPause();
     }
 
     @Override
     protected void onDestroy() {
+        executionResumed = false;
+        executionHandler.removeCallbacks(executionPump);
+        nativeRevokeApproval();
         persistAll();
         if (tts != null) {
             tts.stop();
@@ -656,7 +697,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     speak(reply);
                 }
 
-                handlePendingAction();
+                scheduleExecution();
                 persistAll();
                 refreshStatus();
             });
@@ -681,56 +722,93 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     private void handlePendingAction() {
-        if (actionDialogOpen || isFinishing()) return;
-        String encoded = nativePendingAction();
-        if (encoded == null || encoded.isEmpty()) return;
-        String[] parts = encoded.split("\t", -1);
-        if (parts.length != 4) return;
-        String kind = parts[0];
-        String label = unescape(parts[1]);
-        String payload = unescape(parts[2]);
-        String id = parts[3];
+        if (!executionResumed || awaitingExternalReturn || actionDialogOpen || isFinishing()) return;
+        String snapshot = nativeApprovalSnapshot();
+        if (snapshot == null || snapshot.isEmpty()) { refreshStatus(); return; }
+        String[] rows = snapshot.split("\n");
+        String[] first = rows[0].split("\t", -1);
+        if (first.length != 4) return;
+        if (nativeIsActionApproved(first[3], SystemClock.elapsedRealtime())) {
+            executeApprovedStep(first);
+            return;
+        }
+        StringBuilder preview = new StringBuilder();
+        for (int i = 0; i < rows.length; i++) {
+            String[] p = rows[i].split("\t", -1);
+            if (p.length != 4) return;
+            preview.append(i + 1).append(". ").append(unescape(p[1]))
+                    .append("\n").append(unescape(p[2])).append("\n\n");
+        }
+        preview.append("Tự duyệt chỉ khớp đúng loại thao tác và nội dung ở trên, kể cả các lệnh mới bạn gửi. ")
+                .append("Tối đa 100 lượt / 30 phút; mở lại tiến trình phải cấp lại. ")
+                .append("Mở ứng dụng/URL chỉ xác nhận Android tiếp nhận; chuỗi chờ bạn quay lại BIA.");
+        LinearLayout content = column();
+        content.setPadding(dp(16), dp(8), dp(16), dp(8));
+        android.widget.RadioGroup modes = new android.widget.RadioGroup(this);
+        String[] choices = {"Chỉ bước đầu", "Cả chuỗi hiện tại", "Tự duyệt thao tác đã liệt kê: 30 phút / 100 lượt"};
+        for (int i = 0; i < choices.length; i++) {
+            android.widget.RadioButton option = new android.widget.RadioButton(this);
+            option.setId(i + 1); option.setText(choices[i]); option.setTextColor(TEXT);
+            modes.addView(option);
+        }
+        modes.check(1);
+        content.addView(modes);
+        TextView details = text(preview.toString(), 14, TEXT, Typeface.NORMAL);
+        details.setTextIsSelectable(true);
+        content.addView(details);
+        ScrollView review = new ScrollView(this);
+        review.addView(content);
         actionDialogOpen = true;
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Duyệt bước thực thi của BIA")
-                .setMessage(label + "\n\nNội dung: " + payload
-                        + "\n\nChỉ bước này được phép chạy. Mở ứng dụng/URL chỉ xác nhận hệ điều hành tiếp nhận.")
+                .setTitle("Duyệt phạm vi thực thi")
+                .setView(review)
                 .setNegativeButton("Dừng", (d, which) -> {
-                    synchronized (executionLock) {
-                        boolean cancelled = nativeCancelAction(id);
-                        lastReply = cancelled ? "Đã dừng; không coi việc từ chối là kỹ năng thất bại."
-                                : "Bước đã thay đổi hoặc chưa rõ kết quả; kiểm tra Trạng thái thực thi.";
-                        persistAll();
-                    }
-                    addBubble(lastReply, false);
+                    synchronized (executionLock) { nativeStopAutomation(); persistAll(); }
                     refreshStatus();
                 })
-                .setPositiveButton("Thực thi", (d, which) -> {
-                    boolean continueQueue = false;
+                .setPositiveButton("Cấp quyền và chạy", (d, which) -> {
+                    boolean approved;
                     synchronized (executionLock) {
-                        if (!nativeClaimAction(id)) {
-                            lastReply = "Không chạy: bước đã thay đổi, đang chạy hoặc kết quả chưa xác định. Kiểm tra thiết bị rồi dùng Hủy thực thi nếu cần.";
-                        } else if (!saveContinuity(nativeExportContinuity())) {
-                            // No side effect occurred. Keep the claim blocked in RAM.
-                            lastReply = "Không chạy vì chưa lưu được trạng thái an toàn.";
-                        } else {
-                            boolean success = executeAction(kind, payload);
-                            boolean accepted = nativeCompleteAction(id, success, SystemClock.elapsedRealtime());
-                            boolean saved = saveContinuity(nativeExportContinuity());
-                            lastReply = !accepted || !saved ? "Kết quả chưa được lưu đầy đủ; dừng chuỗi để kiểm tra."
-                                    : success ? (kind.equals("CLIPBOARD_WRITE") ? "Đã kiểm tra nội dung clipboard."
-                                    : "Hệ điều hành đã tiếp nhận thao tác. Chưa xác minh công việc bên trong ứng dụng.")
-                                    : "Thao tác thất bại; đã dừng chuỗi và ghi nhận để lập kế hoạch lại.";
-                            continueQueue = accepted && saved && success;
-                        }
+                        approved = nativeApproveExecution(snapshot, modes.getCheckedRadioButtonId(), SystemClock.elapsedRealtime());
                     }
-                    addBubble(lastReply, false);
+                    if (!approved) addBubble("Hàng đợi đã đổi hoặc có bước chưa rõ kết quả. Chưa cấp quyền; hãy kiểm tra Trạng thái thực thi.", false);
+                    if (approved) scheduleExecution();
                     refreshStatus();
-                    if (continueQueue) getWindow().getDecorView().post(this::handlePendingAction);
                 })
                 .create();
         dialog.setOnDismissListener(d -> actionDialogOpen = false);
         dialog.show();
+    }
+
+    private void executeApprovedStep(String[] parts) {
+        String kind = parts[0];
+        String payload = unescape(parts[2]);
+        String id = parts[3];
+        boolean continueQueue = false;
+        synchronized (executionLock) {
+            if (!nativeClaimAction(id, SystemClock.elapsedRealtime())) {
+                lastReply = "Đã dừng: quyền hết hạn, bước thay đổi hoặc kết quả chưa rõ.";
+            } else if (!saveContinuity(nativeExportContinuity())) {
+                nativeRevokeApproval();
+                lastReply = "Không chạy vì chưa lưu được trạng thái an toàn; đã tắt tự duyệt.";
+            } else {
+                boolean external = !kind.equals("CLIPBOARD_WRITE");
+                awaitingExternalReturn = external;
+                boolean success = executeAction(kind, payload);
+                if (!success) awaitingExternalReturn = false;
+                boolean accepted = nativeCompleteAction(id, success, SystemClock.elapsedRealtime());
+                boolean saved = saveContinuity(nativeExportContinuity());
+                if (!accepted || !saved) nativeRevokeApproval();
+                lastReply = !accepted || !saved ? "Kết quả chưa được lưu đầy đủ; đã tắt tự duyệt và dừng để kiểm tra."
+                        : success ? (external ? "Android đã tiếp nhận thao tác. Quay lại BIA để tiếp tục chuỗi."
+                        : "Đã ghi và kiểm tra clipboard; tiếp tục bước được cấp quyền.")
+                        : "Thao tác thất bại; đã dừng chuỗi, tắt tự duyệt và ghi nhận lỗi kỹ năng.";
+                continueQueue = accepted && saved && success;
+            }
+        }
+        addBubble(lastReply, false);
+        refreshStatus();
+        if (continueQueue) scheduleExecution();
     }
 
     private boolean executeAction(String kind, String payload) {
@@ -874,6 +952,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     private void refreshStatus() {
+        if (executionStatus != null) executionStatus.setText(nativeExecutionPermissionStatus(SystemClock.elapsedRealtime()));
         if (status != null) {
             status.setText(
                     nativeStatus()
