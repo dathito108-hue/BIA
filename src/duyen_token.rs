@@ -18,9 +18,35 @@ pub struct DuyenTokenDecoder {
     four: FourMatrixKernel,
     tam: TamThienMatrix,
     recurrent: [i16; 8],
+    learned_vocab: Vec<String>,
 }
 
 impl DuyenTokenDecoder {
+    pub fn learn_text(&mut self, text: &str) -> usize {
+        let mut added = 0usize;
+        for raw in text.split_whitespace().take(256) {
+            let token = sanitize_token(raw);
+            if token.chars().count() < 2 || token.chars().count() > 32 {
+                continue;
+            }
+            if VOCAB.iter().any(|v| v.eq_ignore_ascii_case(&token))
+                || self.learned_vocab.iter().any(|v| v.eq_ignore_ascii_case(&token))
+            {
+                continue;
+            }
+            if self.learned_vocab.len() >= 128 {
+                self.learned_vocab.remove(0);
+            }
+            self.learned_vocab.push(token);
+            added += 1;
+        }
+        added
+    }
+
+    pub fn learned_vocab_len(&self) -> usize {
+        self.learned_vocab.len()
+    }
+
     pub fn generate(&mut self, input: &str, max_tokens: usize) -> GeneratedSequence {
         let limit = max_tokens.clamp(1, 48);
         let mut out = Vec::with_capacity(limit);
@@ -61,9 +87,17 @@ impl DuyenTokenDecoder {
                 .wrapping_add(previous))
                 % VOCAB.len();
 
-            let token = constrained_token(input, step, idx);
-            previous = token_index(token);
-            out.push(token.to_string());
+            let token = if step >= 4 && !self.learned_vocab.is_empty() && (decision.winner as usize + step) % 3 == 0 {
+                let learned_idx = ((decision.winner as usize * 11)
+                    .wrapping_add(previous)
+                    .wrapping_add(step))
+                    % self.learned_vocab.len();
+                self.learned_vocab[learned_idx].clone()
+            } else {
+                constrained_token(input, step, idx).to_string()
+            };
+            previous = token_index_dynamic(&token, &self.learned_vocab);
+            out.push(token);
             self.feedback(previous, decision.confidence_q15);
 
             if should_stop(input, &out, step) {
@@ -136,8 +170,22 @@ fn should_stop(input: &str, tokens: &[String], step: usize) -> bool {
     step + 1 >= min_len && (tokens.last().map(String::as_str) == Some("hơn") || step >= 15)
 }
 
-fn token_index(token: &str) -> usize {
-    VOCAB.iter().position(|t| *t == token).unwrap_or(0)
+fn token_index_dynamic(token: &str, learned: &[String]) -> usize {
+    if let Some(i) = VOCAB.iter().position(|t| *t == token) {
+        return i;
+    }
+    VOCAB.len()
+        + learned
+            .iter()
+            .position(|t| t == token)
+            .unwrap_or(0)
+}
+
+fn sanitize_token(raw: &str) -> String {
+    raw.trim_matches(|c: char| !c.is_alphanumeric() && c != '_' && c != '-')
+        .chars()
+        .take(32)
+        .collect()
 }
 
 fn normalize(s: &str) -> String {
