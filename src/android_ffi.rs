@@ -349,6 +349,34 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeDeepIntelligenceV2
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeEmergentV25(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let report = crate::run_v25_emergent_intelligence_evaluation();
+    java_string(
+        &mut env,
+        format!(
+            "V25 emergent: pass={}, cases={}, episodic={}/{}, discovery={}/{}, rules={}/{}, competition={}/{}, multidomain={}/{}, accuracy={:.3}, elapsed_us={}",
+            report.passed(),
+            report.cases,
+            report.episodic_passes,
+            report.cases,
+            report.discovery_passes,
+            report.cases,
+            report.rule_passes,
+            report.cases,
+            report.competition_passes,
+            report.cases,
+            report.multidomain_passes,
+            report.cases,
+            report.accuracy(),
+            report.elapsed.as_micros()
+        ),
+    )
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,

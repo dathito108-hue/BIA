@@ -1,7 +1,11 @@
 use crate::abstraction::ConceptAbstraction;
+use crate::competition::{CandidateHypothesis, CompetitionResult, HypothesisCompetition};
+use crate::discovery::ContextDiscovery;
+use crate::episodic::EpisodicMemory;
 use crate::analogy::AnalogicalReasoner;
 use crate::induction::{InducedRelation, InductiveReasoner};
 use crate::open_reasoning::{OpenAnswer, SemanticReasoner};
+use crate::rules::RuleSynthesizer;
 use crate::semantic::SemanticScene;
 use crate::world::WorldGraph;
 
@@ -11,6 +15,10 @@ pub struct OpenIntelligence {
     semantic: SemanticReasoner,
     analogy: AnalogicalReasoner,
     induction: InductiveReasoner,
+    episodes: EpisodicMemory,
+    discovery: ContextDiscovery,
+    rules: RuleSynthesizer,
+    competition: HypothesisCompetition,
 }
 
 impl OpenIntelligence {
@@ -18,6 +26,10 @@ impl OpenIntelligence {
         let _ = self.abstraction.learn_from_text(text);
         let canonical = self.abstraction.canonicalize_text(text);
         let scene = self.semantic.ingest(world, &canonical, timestamp);
+        self.episodes.observe(&scene, timestamp, 0.5);
+        let _ = self.discovery.apply(world);
+        let _ = self.rules.synthesize(&self.episodes);
+        let _ = self.rules.apply(world);
         let _ = self.analogy.apply(world);
         scene
     }
@@ -47,6 +59,18 @@ impl OpenIntelligence {
 
     pub fn abstraction(&self) -> &ConceptAbstraction {
         &self.abstraction
+    }
+
+    pub fn episodes(&self) -> &EpisodicMemory {
+        &self.episodes
+    }
+
+    pub fn rules(&self) -> &RuleSynthesizer {
+        &self.rules
+    }
+
+    pub fn compete(&self, candidates: &[CandidateHypothesis]) -> CompetitionResult {
+        self.competition.choose(candidates)
     }
 
     pub fn analogy(&self) -> &AnalogicalReasoner {

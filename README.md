@@ -237,3 +237,20 @@ This block deepens BIA's open intelligence without adding a large language model
 - **Android proof:** `/deep` runs the V21–V24 proof suite natively.
 
 These capabilities are structured symbolic/generalization mechanisms. They improve breadth and transfer but do not make BIA equivalent to a frontier-scale language model.
+
+
+## Inference V25–V30 — Emergent Structured Intelligence
+
+This block makes BIA learn more structure from repeated experience instead of relying only on explicitly provided definitions.
+
+- **Episodic Memory:** stores up to 128 bounded semantic episodes, each with at most 12 clauses.
+- **Context Discovery:** discovers Similar relations when previously separate entities repeatedly occupy the same causal role in at least two shared contexts.
+- **Rule Synthesis:** repeated two-step episode patterns can become bounded composition rules such as Causes + Enables -> Causes.
+- **Rule Transfer:** synthesized rules can be applied to a later unseen chain without replaying all prior episodes.
+- **Hypothesis Competition:** causal, analogical, induced or rule-based candidates can compete; near-equal opposite hypotheses remain contradicted instead of being forced into one answer.
+- **Multi-domain structural reasoning:** the same bounded reasoning machinery is tested across changing battery/network/game/risk-style symbolic domains.
+- **Android proof:** `/emergent` runs the V25–V30 proof suite natively.
+
+Hard bounds remain: 128 episodes, 12 clauses per episode, 16 discovered similarities per pass, 32 synthesized rules, 32 rule applications per pass, and bounded hypothesis scoring.
+
+These mechanisms demonstrate structured learning and transfer over the defined proof families. They do not establish human-level or frontier-model open intelligence.

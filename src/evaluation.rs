@@ -778,3 +778,229 @@ pub fn run_v21_deep_intelligence_evaluation() -> V21DeepIntelligenceReport {
         elapsed: start.elapsed(),
     }
 }
+
+
+#[derive(Clone, Debug)]
+pub struct V25EmergentIntelligenceReport {
+    pub cases: usize,
+    pub episodic_passes: usize,
+    pub discovery_passes: usize,
+    pub rule_passes: usize,
+    pub competition_passes: usize,
+    pub multidomain_passes: usize,
+    pub elapsed: Duration,
+}
+
+impl V25EmergentIntelligenceReport {
+    pub fn passed(&self) -> bool {
+        self.episodic_passes == self.cases
+            && self.discovery_passes == self.cases
+            && self.rule_passes == self.cases
+            && self.competition_passes == self.cases
+            && self.multidomain_passes == self.cases
+    }
+
+    pub fn accuracy(&self) -> f32 {
+        let denom = (self.cases * 5).max(1) as f32;
+        (self.episodic_passes
+            + self.discovery_passes
+            + self.rule_passes
+            + self.competition_passes
+            + self.multidomain_passes) as f32
+            / denom
+    }
+}
+
+pub fn run_v25_emergent_intelligence_evaluation() -> V25EmergentIntelligenceReport {
+    use crate::competition::{CandidateHypothesis, HypothesisCompetition};
+    use crate::discovery::ContextDiscovery;
+    use crate::episodic::EpisodicMemory;
+    use crate::open_intelligence::OpenIntelligence;
+    use crate::open_reasoning::OpenAnswer;
+    use crate::rules::RuleSynthesizer;
+    use crate::semantic::{concept_id, VietnameseSemanticParser};
+    use crate::types::{Relation, RelationKind};
+    use crate::world::WorldGraph;
+
+    let start = Instant::now();
+    let cases = 128usize;
+    let mut episodic = 0usize;
+    let mut discovery = 0usize;
+    let mut rules = 0usize;
+    let mut competition = 0usize;
+    let mut multidomain = 0usize;
+
+    for i in 0..cases {
+        let parser = VietnameseSemanticParser;
+        let mut memory = EpisodicMemory::default();
+
+        let e1 = parser.parse(&format!(
+            "nguon_a_{i} gây ra trung_a_{i}. trung_a_{i} cho phép dich_a_{i}."
+        ));
+        let e2 = parser.parse(&format!(
+            "nguon_b_{i} gây ra trung_b_{i}. trung_b_{i} cho phép dich_b_{i}."
+        ));
+        memory.observe(&e1, 1, 0.7);
+        memory.observe(&e2, 2, 0.8);
+        if memory.len() == 2 && memory.episodes().iter().all(|e| e.clauses.len() == 2) {
+            episodic += 1;
+        }
+
+        let mut world = WorldGraph::new(256, 512);
+        let shared1 = concept_id(&format!("shared_x_{i}"));
+        let shared2 = concept_id(&format!("shared_y_{i}"));
+        let p = concept_id(&format!("pattern_p_{i}"));
+        let q = concept_id(&format!("pattern_q_{i}"));
+        for id in [shared1, shared2, p, q] {
+            world.upsert(crate::types::Phenomenon::new(
+                id,
+                crate::types::WorldLevel::TrungThien,
+                crate::types::SenseGate::Mind,
+                id as u32,
+                vec![0.5, 0.5],
+                0.9,
+                0.7,
+                1,
+            ));
+        }
+        for (from, to) in [(p, shared1), (q, shared1), (p, shared2), (q, shared2)] {
+            world.relate(Relation {
+                from,
+                to,
+                kind: RelationKind::Causes,
+                strength: 0.9,
+                confidence: 0.9,
+            });
+        }
+        let discovered = ContextDiscovery::default().apply(&mut world);
+        if discovered > 0
+            && world.edges().iter().any(|e| {
+                e.kind == RelationKind::Similar
+                    && ((e.from == p && e.to == q) || (e.from == q && e.to == p))
+            })
+        {
+            discovery += 1;
+        }
+
+        let mut synth = RuleSynthesizer::default();
+        if synth.synthesize(&memory) > 0 {
+            let novel_a = concept_id(&format!("novel_a_{i}"));
+            let novel_b = concept_id(&format!("novel_b_{i}"));
+            let novel_c = concept_id(&format!("novel_c_{i}"));
+            for id in [novel_a, novel_b, novel_c] {
+                world.upsert(crate::types::Phenomenon::new(
+                    id,
+                    crate::types::WorldLevel::TrungThien,
+                    crate::types::SenseGate::Mind,
+                    id as u32,
+                    vec![0.4, 0.6],
+                    0.9,
+                    0.7,
+                    2,
+                ));
+            }
+            world.relate(Relation {
+                from: novel_a,
+                to: novel_b,
+                kind: RelationKind::Causes,
+                strength: 0.9,
+                confidence: 0.9,
+            });
+            world.relate(Relation {
+                from: novel_b,
+                to: novel_c,
+                kind: RelationKind::Enables,
+                strength: 0.9,
+                confidence: 0.9,
+            });
+            let applied = synth.apply(&mut world);
+            if applied > 0
+                && world.edges().iter().any(|e| {
+                    e.from == novel_a && e.to == novel_c && e.kind == RelationKind::Causes
+                })
+            {
+                rules += 1;
+            }
+        }
+
+        let competition_engine = HypothesisCompetition;
+        let winner_rel = Relation {
+            from: 1,
+            to: 2,
+            kind: RelationKind::Causes,
+            strength: 0.95,
+            confidence: 0.95,
+        };
+        let weak_rel = Relation {
+            from: 1,
+            to: 2,
+            kind: RelationKind::Enables,
+            strength: 0.55,
+            confidence: 0.70,
+        };
+        let clear = competition_engine.choose(&[
+            CandidateHypothesis {
+                relation: winner_rel.clone(),
+                source: "causal",
+                evidence: 4,
+            },
+            CandidateHypothesis {
+                relation: weak_rel,
+                source: "analogy",
+                evidence: 1,
+            },
+        ]);
+        let conflict = competition_engine.choose(&[
+            CandidateHypothesis {
+                relation: winner_rel,
+                source: "causal",
+                evidence: 2,
+            },
+            CandidateHypothesis {
+                relation: Relation {
+                    from: 1,
+                    to: 2,
+                    kind: RelationKind::Inhibits,
+                    strength: 0.94,
+                    confidence: 0.95,
+                },
+                source: "counter",
+                evidence: 2,
+            },
+        ]);
+        if clear.winner.is_some() && !clear.contradicted && conflict.winner.is_none() && conflict.contradicted {
+            competition += 1;
+        }
+
+        let mut intelligence = OpenIntelligence::default();
+        let mut domain_world = WorldGraph::new(256, 512);
+        let domains = [
+            ("pin", "giamxung", "latency"),
+            ("mang", "matgoi", "lag"),
+            ("game", "quatai", "giat"),
+            ("gia", "bien_dong", "rui_ro"),
+        ];
+        let (a, b, c) = domains[i % domains.len()];
+        let scene = intelligence.learn(
+            &mut domain_world,
+            &format!("{a}_{i} gây ra {b}_{i}. {b}_{i} dẫn đến {c}_{i}. {a}_{i} có gây ra {c}_{i} không?"),
+            i as u64,
+        );
+        if matches!(
+            intelligence.answer_scene(&domain_world, &scene),
+            OpenAnswer::Supported { path, .. } if path.len() >= 3
+        ) {
+            multidomain += 1;
+        }
+    }
+
+    V25EmergentIntelligenceReport {
+        cases,
+        episodic_passes: episodic,
+        discovery_passes: discovery,
+        rule_passes: rules,
+        competition_passes: competition,
+        multidomain_passes: multidomain,
+        elapsed: start.elapsed(),
+    }
+}
