@@ -1,5 +1,6 @@
 use crate::abstraction::ConceptAbstraction;
 use crate::analogy::AnalogicalReasoner;
+use crate::induction::{InducedRelation, InductiveReasoner};
 use crate::open_reasoning::{OpenAnswer, SemanticReasoner};
 use crate::semantic::SemanticScene;
 use crate::world::WorldGraph;
@@ -9,6 +10,7 @@ pub struct OpenIntelligence {
     abstraction: ConceptAbstraction,
     semantic: SemanticReasoner,
     analogy: AnalogicalReasoner,
+    induction: InductiveReasoner,
 }
 
 impl OpenIntelligence {
@@ -49,5 +51,23 @@ impl OpenIntelligence {
 
     pub fn analogy(&self) -> &AnalogicalReasoner {
         &self.analogy
+    }
+
+    pub fn induce_between(
+        &self,
+        world: &WorldGraph,
+        from: u64,
+        to: u64,
+    ) -> Option<InducedRelation> {
+        self.induction.infer_between(world, from, to)
+    }
+
+    pub fn apply_induction(
+        &self,
+        world: &mut WorldGraph,
+        from: u64,
+        to: u64,
+    ) -> Option<InducedRelation> {
+        self.induction.apply_between(world, from, to)
     }
 }
