@@ -285,3 +285,18 @@ This block adds bounded internal simulation before action.
 - **Android proof:** `/world` runs the V37–V44 deliberation suite natively.
 
 The world model is a compact structured simulator over explicit facts and transitions. It improves prospective reasoning and planning, but is not yet a learned high-dimensional simulator of unrestricted real-world environments.
+
+
+## Inference V45–V60 — Metacognitive Self-Directed Intelligence
+
+This block adds bounded self-monitoring and self-directed reasoning control on top of BIA's causal, autonomous-knowledge and world-model layers.
+
+- **Metacognition:** estimates certainty, conflict, complexity and evidence gaps, then selects Answer / SeekEvidence / Deepen / Hold.
+- **Self-Calibration:** tracks recent prediction confidence vs. correctness, computes bias/Brier score and adjusts later certainty.
+- **Active Evidence Seeking:** generates a bounded evidence request for support, opposition, missing links or fresh observations when confidence is insufficient.
+- **Recursive Deliberation:** allows up to four refinement passes and stops early when marginal reasoning gain collapses.
+- **Self-Directed Compute:** routes reasoning to Instant / Normal / Deep / EvidenceFirst based jointly on uncertainty and device battery/thermal/load/memory pressure.
+- **Cross-Domain Skill Transfer:** extracts a small structural action pattern from one WorldModel and maps it onto another domain using utility-sign/effect structure.
+- **Android proof:** `/maxintel` runs the V45–V60 suite natively.
+
+All new loops are strictly bounded. These mechanisms raise BIA's ability to regulate its own reasoning, but do not make it equivalent to a frontier-scale foundation model or establish unrestricted AGI.
