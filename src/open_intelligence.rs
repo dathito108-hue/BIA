@@ -1,4 +1,5 @@
 use crate::abstraction::ConceptAbstraction;
+use crate::autonomous_cognitive_loop::{AutonomousCognitiveLoop, CognitiveLoopInput, CognitiveLoopResult};
 use crate::active_evidence::{ActiveEvidenceSeeker, EvidenceRequest};
 use crate::budget::DeviceState;
 use crate::calibration::SelfCalibration;
@@ -10,6 +11,7 @@ use crate::discovery::ContextDiscovery;
 use crate::episodic::EpisodicMemory;
 use crate::analogy::AnalogicalReasoner;
 use crate::generative_cognition::{GeneratedThought, GenerativeCognition};
+use crate::idle_cognition::{IdleCognitionScheduler, IdleCognitiveTask};
 use crate::hierarchy::HierarchicalAbstraction;
 use crate::hybrid_semantic::{HybridSemanticReasoner, LatentInference};
 use crate::latent_memory::LatentMemory;
@@ -59,6 +61,8 @@ pub struct OpenIntelligence {
     symbol_bridge: LatentSymbolBridge,
     consolidator: SemanticConsolidator,
     generator: GenerativeCognition,
+    cognitive_loop: AutonomousCognitiveLoop,
+    idle_scheduler: IdleCognitionScheduler,
 }
 
 impl OpenIntelligence {
@@ -267,6 +271,38 @@ impl OpenIntelligence {
 
     pub fn generate_thought(&self, answer: &OpenAnswer, uncertainty: f32) -> GeneratedThought {
         self.generator.render(answer, uncertainty)
+    }
+
+    pub fn autonomous_cycle(
+        &mut self,
+        answer: &OpenAnswer,
+        input: &CognitiveLoopInput,
+    ) -> CognitiveLoopResult {
+        let assessment = self.assess_cognition(
+            input.support,
+            input.opposition,
+            input.path_len,
+            input.evidence_count,
+        );
+        self.cognitive_loop.run(
+            input.target,
+            answer,
+            &assessment,
+            input.uncertainty,
+            input.evidence_count,
+        )
+    }
+
+    pub fn choose_idle_cognition(
+        &mut self,
+        device: DeviceState,
+        pending_external_action: bool,
+    ) -> IdleCognitiveTask {
+        self.idle_scheduler.choose(
+            device,
+            pending_external_action,
+            self.cognitive_loop.unresolved_questions(),
+        )
     }
 
     pub fn analogy(&self) -> &AnalogicalReasoner {

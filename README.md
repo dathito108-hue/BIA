@@ -333,3 +333,20 @@ This milestone closes the loop between learned semantics, durable concepts, expl
 - **App version:** 1.0.0.
 
 The response generator is a small deterministic cognitive surface planner, not a pretrained autoregressive language model. It demonstrates reasoning-conditioned generation and continual semantic stability inside BIA's bounded architecture; it does not establish unrestricted human-level language generation or AGI.
+
+
+## Inference V101–V128 — Autonomous Cognitive Loop
+
+This milestone connects BIA's reasoning, metacognition, evidence seeking, generative cognition and authority controls into one bounded self-review loop.
+
+- **Internal question agenda:** conflict, unknown answers, complexity and evidence gaps create bounded internal questions such as missing cause, counter-evidence and alternative explanation.
+- **Answer critic:** every candidate answer is scored for evidence sufficiency, contradiction risk and overconfidence risk before final rendering.
+- **Bounded cognitive loop:** QUESTION → EVIDENCE → DELIBERATE → CRITIQUE → STOP/REVISE runs for at most four passes and holds no more than eight internal questions.
+- **Real chat integration:** causal answers now pass through autonomous self-review before being rendered to the Android user.
+- **Confidence-aware revision:** unresolved conflict lowers confidence and can request more evidence instead of forcing a strong conclusion.
+- **Idle cognition scheduler:** when battery/thermal/load/memory conditions are healthy and no external action is pending, BIA may schedule memory consolidation, anchor rehearsal or hypothesis reevaluation.
+- **Authority isolation:** idle/autonomous cognition is explicitly disabled while an external device action is waiting for user approval; the loop never bypasses the existing authority gate.
+- **Android proof:** `/loop` runs the V101–V128 proof suite natively.
+- **App version:** 1.28.0.
+
+The autonomous loop is bounded self-review over BIA's existing structured cognition. It does not grant unrestricted external autonomy, does not bypass user approval for side effects, and does not establish unrestricted AGI.

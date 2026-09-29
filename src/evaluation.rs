@@ -1916,3 +1916,149 @@ pub fn run_v81_continual_generative_evaluation() -> V81ContinualGenerativeReport
         elapsed: started.elapsed(),
     }
 }
+
+
+#[derive(Clone, Debug)]
+pub struct V101AutonomousLoopReport {
+    pub cases: usize,
+    pub question_passes: usize,
+    pub critic_passes: usize,
+    pub loop_passes: usize,
+    pub self_review_passes: usize,
+    pub idle_passes: usize,
+    pub authority_passes: usize,
+    pub elapsed: Duration,
+}
+
+impl V101AutonomousLoopReport {
+    pub fn passed(&self) -> bool {
+        self.question_passes == self.cases
+            && self.critic_passes == self.cases
+            && self.loop_passes == self.cases
+            && self.self_review_passes == self.cases
+            && self.idle_passes == self.cases
+            && self.authority_passes == self.cases
+    }
+
+    pub fn accuracy(&self) -> f32 {
+        let denom = (self.cases * 6).max(1) as f32;
+        (self.question_passes
+            + self.critic_passes
+            + self.loop_passes
+            + self.self_review_passes
+            + self.idle_passes
+            + self.authority_passes) as f32
+            / denom
+    }
+}
+
+pub fn run_v101_autonomous_loop_evaluation() -> V101AutonomousLoopReport {
+    use crate::answer_critic::AnswerCritic;
+    use crate::autonomous_cognitive_loop::{AutonomousCognitiveLoop, LoopDecision};
+    use crate::budget::DeviceState;
+    use crate::idle_cognition::{IdleCognitionScheduler, IdleCognitiveTask};
+    use crate::internal_questions::CognitiveAgenda;
+    use crate::metacognition::MetacognitiveController;
+    use crate::open_reasoning::OpenAnswer;
+
+    let started = Instant::now();
+    let cases = 128usize;
+    let mut questions = 0usize;
+    let mut critic = 0usize;
+    let mut loop_ok = 0usize;
+    let mut self_review = 0usize;
+    let mut idle = 0usize;
+    let mut authority = 0usize;
+
+    for i in 0..cases {
+        let controller = MetacognitiveController;
+        let conflicted = controller.assess(0.82, 0.76, 4, 3);
+        let conflict_answer = OpenAnswer::Contradicted {
+            support: 0.82,
+            opposition: 0.76,
+        };
+
+        let mut agenda = CognitiveAgenda::default();
+        let added = agenda.formulate(i as u64 + 1, &conflicted, &conflict_answer);
+        if added >= 2 && agenda.unresolved() >= 2 && agenda.next().is_some() {
+            questions += 1;
+        }
+
+        let strong_answer = OpenAnswer::Supported {
+            confidence: 0.94,
+            path: vec![1, 2, 3, 4],
+        };
+        let strong_critique = AnswerCritic.critique(&strong_answer, 0.06, 6);
+        let conflict_critique = AnswerCritic.critique(&conflict_answer, 0.45, 2);
+        if !strong_critique.revise
+            && strong_critique.quality > 0.65
+            && conflict_critique.revise
+            && conflict_critique.contradiction_risk > 0.45
+        {
+            critic += 1;
+        }
+
+        let mut loop_controller = AutonomousCognitiveLoop::default();
+        let result = loop_controller.run(
+            i as u64 + 10_000,
+            &conflict_answer,
+            &conflicted,
+            0.45,
+            2,
+        );
+        if result.passes <= 4
+            && result.stopped_bounded
+            && result.internal_questions <= 8
+            && result.resolved_questions <= result.internal_questions
+        {
+            loop_ok += 1;
+        }
+
+        let confident = controller.assess(0.97, 0.01, 2, 8);
+        let mut answer_loop = AutonomousCognitiveLoop::default();
+        let reviewed = answer_loop.run(
+            i as u64 + 20_000,
+            &strong_answer,
+            &confident,
+            0.04,
+            8,
+        );
+        if reviewed.decision == LoopDecision::Answer
+            && reviewed.final_confidence >= 0.72
+            && !reviewed.critique.revise
+        {
+            self_review += 1;
+        }
+
+        let healthy = DeviceState {
+            battery: 0.85,
+            thermal: 0.15,
+            load: 0.20,
+            available_memory_mb: 1024,
+        };
+        let mut scheduler = IdleCognitionScheduler::default();
+        let chosen = scheduler.choose(healthy, false, 0);
+        if matches!(
+            chosen,
+            IdleCognitiveTask::ConsolidateMemory | IdleCognitiveTask::RehearseAnchors
+        ) {
+            idle += 1;
+        }
+
+        let blocked = scheduler.choose(healthy, true, 3);
+        if blocked == IdleCognitiveTask::None {
+            authority += 1;
+        }
+    }
+
+    V101AutonomousLoopReport {
+        cases,
+        question_passes: questions,
+        critic_passes: critic,
+        loop_passes: loop_ok,
+        self_review_passes: self_review,
+        idle_passes: idle,
+        authority_passes: authority,
+        elapsed: started.elapsed(),
+    }
+}

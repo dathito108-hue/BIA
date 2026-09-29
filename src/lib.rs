@@ -5,6 +5,8 @@ pub mod android_ffi;
 pub mod abstraction;
 pub mod active_evidence;
 pub mod autonomous_hypothesis;
+pub mod autonomous_cognitive_loop;
+pub mod answer_critic;
 pub mod analogy;
 pub mod action;
 pub mod action_queue;
@@ -14,6 +16,8 @@ pub mod calibration;
 pub mod capability;
 pub mod continuity;
 pub mod hierarchy;
+pub mod idle_cognition;
+pub mod internal_questions;
 pub mod hybrid_semantic;
 pub mod competition;
 pub mod concept_composition;
@@ -69,6 +73,8 @@ pub mod world_model;
 pub use abstraction::{ConceptAbstraction, ConceptGroup};
 pub use active_evidence::{ActiveEvidenceSeeker, EvidenceRequest, EvidenceRequestKind};
 pub use autonomous_hypothesis::AutonomousHypothesisGenerator;
+pub use autonomous_cognitive_loop::{AutonomousCognitiveLoop, CognitiveLoopInput, CognitiveLoopResult, LoopDecision};
+pub use answer_critic::{AnswerCritic, AnswerCritique};
 pub use action::{ActionDecision, ActionProposal, Authority, CuTranPolicy};
 pub use analogy::{AnalogicalHypothesis, AnalogicalReasoner};
 pub use action_queue::ActionQueue;
@@ -86,7 +92,7 @@ pub use deliberation::{DeliberativePlanner, GoalSpec, PlanCandidate};
 pub use discovery::{ContextDiscovery, DiscoveredSimilarity};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
 pub use episodic::{Episode, EpisodeClause, EpisodicMemory};
-pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, run_v25_emergent_intelligence_evaluation, run_v31_autonomous_knowledge_evaluation, run_v37_deliberation_evaluation, run_v45_max_intelligence_evaluation, run_v61_learned_semantic_evaluation, run_v81_continual_generative_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport, V25EmergentIntelligenceReport, V31AutonomousKnowledgeReport, V37DeliberationReport, V45MaxIntelligenceReport, V61LearnedSemanticReport, V81ContinualGenerativeReport};
+pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, run_v25_emergent_intelligence_evaluation, run_v31_autonomous_knowledge_evaluation, run_v37_deliberation_evaluation, run_v45_max_intelligence_evaluation, run_v61_learned_semantic_evaluation, run_v81_continual_generative_evaluation, run_v101_autonomous_loop_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport, V25EmergentIntelligenceReport, V31AutonomousKnowledgeReport, V37DeliberationReport, V45MaxIntelligenceReport, V61LearnedSemanticReport, V81ContinualGenerativeReport, V101AutonomousLoopReport};
 pub use four_matrix::{
     adaptive_realm_weights, classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
     FourMatrixOutput, PerspectiveProjection, RealmBand, AGGREGATES,
@@ -94,6 +100,8 @@ pub use four_matrix::{
 pub use generative_cognition::{GeneratedThought, GenerativeCognition, ResponseStance};
 pub use goals::{Goal, GoalStack, GoalStatus};
 pub use hierarchy::{AbstractConcept, HierarchicalAbstraction, RoleSignature};
+pub use idle_cognition::{IdleCognitionScheduler, IdleCognitiveTask};
+pub use internal_questions::{CognitiveAgenda, InternalQuestion, InternalQuestionKind};
 pub use hybrid_semantic::{HybridSemanticReasoner, LatentInference};
 pub use curriculum::{score as score_curriculum, CurriculumDomain, CurriculumScore, TrialResult};
 pub use induction::{InducedRelation, InductiveReasoner};
@@ -1544,6 +1552,59 @@ mod tests {
     #[test]
     fn v81_continual_generative_suite_passes() {
         let report = run_v81_continual_generative_evaluation();
+        assert!(report.passed(), "report={report:?}");
+        assert_eq!(report.accuracy(), 1.0);
+    }
+
+    #[test]
+    fn cognitive_agenda_forms_counter_questions_under_conflict() {
+        let assessment = MetacognitiveController.assess(0.82, 0.76, 4, 3);
+        let answer = OpenAnswer::Contradicted {
+            support: 0.82,
+            opposition: 0.76,
+        };
+        let mut agenda = CognitiveAgenda::default();
+        assert!(agenda.formulate(42, &assessment, &answer) >= 2);
+        assert!(agenda.unresolved() >= 2);
+    }
+
+    #[test]
+    fn answer_critic_revises_conflicted_but_accepts_strong_supported() {
+        let strong = OpenAnswer::Supported {
+            confidence: 0.95,
+            path: vec![1, 2, 3, 4],
+        };
+        let conflict = OpenAnswer::Contradicted {
+            support: 0.82,
+            opposition: 0.78,
+        };
+        let critic = AnswerCritic;
+        assert!(!critic.critique(&strong, 0.05, 7).revise);
+        assert!(critic.critique(&conflict, 0.4, 2).revise);
+    }
+
+    #[test]
+    fn autonomous_loop_is_bounded_and_authority_safe() {
+        let assessment = MetacognitiveController.assess(0.82, 0.76, 4, 3);
+        let answer = OpenAnswer::Contradicted {
+            support: 0.82,
+            opposition: 0.76,
+        };
+        let mut loop_controller = AutonomousCognitiveLoop::default();
+        let result = loop_controller.run(7, &answer, &assessment, 0.45, 2);
+        assert!(result.passes <= 4);
+        assert!(result.stopped_bounded);
+
+        let mut idle = IdleCognitionScheduler::default();
+        assert_eq!(
+            idle.choose(device(), true, 2),
+            IdleCognitiveTask::None
+        );
+    }
+
+    #[test]
+    fn v101_autonomous_loop_suite_passes() {
+        let report = run_v101_autonomous_loop_evaluation();
         assert!(report.passed(), "report={report:?}");
         assert_eq!(report.accuracy(), 1.0);
     }
