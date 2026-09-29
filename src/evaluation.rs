@@ -1574,3 +1574,168 @@ pub fn run_v45_max_intelligence_evaluation() -> V45MaxIntelligenceReport {
         elapsed: start.elapsed(),
     }
 }
+
+
+#[derive(Clone, Debug)]
+pub struct V61LearnedSemanticReport {
+    pub cases: usize,
+    pub embedding_passes: usize,
+    pub latent_memory_passes: usize,
+    pub relation_passes: usize,
+    pub vector_retrieval_passes: usize,
+    pub compression_passes: usize,
+    pub hybrid_passes: usize,
+    pub elapsed: Duration,
+}
+
+impl V61LearnedSemanticReport {
+    pub fn passed(&self) -> bool {
+        self.embedding_passes == self.cases
+            && self.latent_memory_passes == self.cases
+            && self.relation_passes == self.cases
+            && self.vector_retrieval_passes == self.cases
+            && self.compression_passes == self.cases
+            && self.hybrid_passes == self.cases
+    }
+
+    pub fn accuracy(&self) -> f32 {
+        let denom = (self.cases * 6).max(1) as f32;
+        (self.embedding_passes
+            + self.latent_memory_passes
+            + self.relation_passes
+            + self.vector_retrieval_passes
+            + self.compression_passes
+            + self.hybrid_passes) as f32
+            / denom
+    }
+}
+
+pub fn run_v61_learned_semantic_evaluation() -> V61LearnedSemanticReport {
+    use crate::hybrid_semantic::HybridSemanticReasoner;
+    use crate::knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
+    use crate::latent_memory::LatentMemory;
+    use crate::latent_relation::LatentRelationLearner;
+    use crate::semantic_compression::SemanticCompressor;
+    use crate::semantic_embedding::SemanticEncoder;
+    use crate::types::RelationKind;
+    use crate::vector_retrieval::VectorSemanticRetriever;
+
+    let started = Instant::now();
+    let cases = 128usize;
+    let mut embedding = 0usize;
+    let mut latent_memory = 0usize;
+    let mut relation = 0usize;
+    let mut vector_retrieval = 0usize;
+    let mut compression = 0usize;
+    let mut hybrid = 0usize;
+
+    for i in 0..cases {
+        let encoder = SemanticEncoder;
+        let a = encoder.encode(&format!("pin yeu gay ra hieu nang cham {i}"));
+        let b = encoder.encode(&format!("pin yeu gay nen may cham {i}"));
+        let unrelated = encoder.encode(&format!("hoa sen no buoi sang {i}"));
+        if a.cosine(&b) > a.cosine(&unrelated) {
+            embedding += 1;
+        }
+
+        let mut memory = LatentMemory::default();
+        memory.remember(
+            i as u64 + 1,
+            &format!("nhiet cao gay ra throttling {i}"),
+            0.95,
+        );
+        memory.remember(
+            i as u64 + 10_000,
+            &format!("hoa sen no buoi sang {i}"),
+            0.95,
+        );
+        if memory
+            .nearest(&format!("nhiet cao gay nen throttling {i}"), 1)
+            .first()
+            .is_some_and(|(item, _)| item.id == i as u64 + 1)
+        {
+            latent_memory += 1;
+        }
+
+        let mut learner = LatentRelationLearner::default();
+        for text in [
+            format!("a{i} gay ra b{i}"),
+            format!("c{i} gay ra d{i}"),
+            format!("e{i} dan den f{i}"),
+        ] {
+            learner.observe(&text, RelationKind::Causes, 0.96);
+        }
+        for text in [
+            format!("g{i} cho phep h{i}"),
+            format!("j{i} ho tro k{i}"),
+            format!("m{i} tao dieu kien cho n{i}"),
+        ] {
+            learner.observe(&text, RelationKind::Enables, 0.96);
+        }
+        for text in [
+            format!("p{i} ngan q{i}"),
+            format!("r{i} can tro s{i}"),
+            format!("t{i} ngan can u{i}"),
+        ] {
+            learner.observe(&text, RelationKind::Inhibits, 0.96);
+        }
+
+        if learner
+            .classify(&format!("x{i} gay nen y{i}"))
+            .is_some_and(|(kind, score)| kind == RelationKind::Causes && score >= 0.58)
+        {
+            relation += 1;
+        }
+
+        let mut ledger = KnowledgeLedger::new(8);
+        ledger.add(KnowledgeRecord {
+            id: 1,
+            source: "thermal".to_string(),
+            kind: ProvenanceKind::LocalDocument,
+            excerpt: format!("nhiet cao gay ra throttling va lam may cham {i}"),
+            timestamp: 1,
+            confidence: 0.95,
+        });
+        ledger.add(KnowledgeRecord {
+            id: 2,
+            source: "lotus".to_string(),
+            kind: ProvenanceKind::LocalDocument,
+            excerpt: format!("hoa sen no vao buoi sang {i}"),
+            timestamp: 2,
+            confidence: 0.95,
+        });
+        if VectorSemanticRetriever::default()
+            .recall(&ledger, &format!("nhiet cao gay nen may cham {i}"), 1)
+            .first()
+            .is_some_and(|h| h.record.id == 1)
+        {
+            vector_retrieval += 1;
+        }
+
+        let mut compressor = SemanticCompressor::default();
+        let c1 = compressor.observe(&format!("pin yeu gay ra may cham {i}"), 0.9);
+        let c2 = compressor.observe(&format!("pin yeu gay nen may cham {i}"), 0.9);
+        if c1 == c2 && compressor.len() == 1 {
+            compression += 1;
+        }
+
+        let reasoner = HybridSemanticReasoner;
+        if reasoner
+            .infer_clause(&learner, &format!("nguon{i} gay nen dich{i}"))
+            .is_some_and(|x| x.kind == RelationKind::Causes && x.confidence > 0.45)
+        {
+            hybrid += 1;
+        }
+    }
+
+    V61LearnedSemanticReport {
+        cases,
+        embedding_passes: embedding,
+        latent_memory_passes: latent_memory,
+        relation_passes: relation,
+        vector_retrieval_passes: vector_retrieval,
+        compression_passes: compression,
+        hybrid_passes: hybrid,
+        elapsed: started.elapsed(),
+    }
+}
