@@ -1,5 +1,5 @@
 use crate::answer_critic::{AnswerCritic, AnswerCritique};
-use crate::internal_questions::{CognitiveAgenda, InternalQuestionKind};
+use crate::internal_questions::CognitiveAgenda;
 use crate::metacognition::{CognitiveAssessment, CognitiveDecision};
 use crate::open_reasoning::OpenAnswer;
 
@@ -49,63 +49,63 @@ impl AutonomousCognitiveLoop {
         uncertainty: f32,
         evidence_count: usize,
     ) -> CognitiveLoopResult {
+        // This agenda belongs to one query snapshot. A prior target must not
+        // consume its capacity or have its questions silently resolved here.
+        self.agenda = CognitiveAgenda::default();
         let _ = self.agenda.formulate(target, assessment, answer);
-        let mut passes = 0usize;
-        let mut resolved = 0usize;
-        let mut confidence = assessment.certainty;
-        let mut critique = self.critic.critique(answer, uncertainty, evidence_count);
-
-        while passes < MAX_LOOP_PASSES {
-            passes += 1;
-
-            let need_more = critique.revise
-                || assessment.decision == CognitiveDecision::SeekEvidence
-                || assessment.decision == CognitiveDecision::Deepen;
-            if !need_more {
-                break;
+        let critique = self.critic.critique(answer, uncertainty, evidence_count);
+        let answer_confidence = match answer {
+            OpenAnswer::Supported { confidence, .. } | OpenAnswer::Opposed { confidence, .. } => {
+                *confidence
             }
+            OpenAnswer::Contradicted {
+                support,
+                opposition,
+            } => (support - opposition).abs(),
+            OpenAnswer::Counterfactual {
+                factual_support,
+                counterfactual_support,
+                ..
+            } => factual_support.max(*counterfactual_support),
+            OpenAnswer::Unknown => 0.0,
+        };
+        let confidence = finite_unit(assessment.certainty)
+            .min(finite_unit(answer_confidence))
+            .min(if uncertainty.is_finite() {
+                1.0 - finite_unit(uncertainty)
+            } else {
+                0.0
+            });
 
-            let Some(question) = self.agenda.next().cloned() else {
-                break;
-            };
-            confidence = refine_confidence(confidence, question.kind, &critique);
-            if self.agenda.resolve_next() {
-                resolved += 1;
-            }
-
-            critique = AnswerCritique {
-                quality: (critique.quality + 0.07).min(1.0),
-                evidence_sufficiency: (critique.evidence_sufficiency + 0.08).min(1.0),
-                contradiction_risk: (critique.contradiction_risk - 0.05).max(0.0),
-                overconfidence_risk: (critique.overconfidence_risk - 0.04).max(0.0),
-                revise: false,
-            };
-
-            if confidence >= 0.78 && critique.quality >= 0.65 {
-                break;
-            }
-        }
-
-        let decision = if critique.contradiction_risk >= 0.45 {
+        // No evidence provider is attached to this review. Repeating the same
+        // snapshot cannot improve its evidence, resolve questions or remove
+        // conflict. Stop immediately; the caller can retrieve/observe and retry.
+        let needs_evidence = matches!(
+            answer,
+            OpenAnswer::Unknown | OpenAnswer::Contradicted { .. }
+        ) || evidence_count == 0
+            || assessment.decision == CognitiveDecision::SeekEvidence
+            || critique.contradiction_risk >= 0.45;
+        let decision = if needs_evidence {
             LoopDecision::GatherEvidence
         } else if confidence >= 0.72 && !critique.revise {
             LoopDecision::Answer
-        } else if self.agenda.unresolved() > 0 {
-            LoopDecision::GatherEvidence
         } else if assessment.complexity > 0.55 {
             LoopDecision::Deepen
+        } else if self.agenda.unresolved() > 0 || critique.revise {
+            LoopDecision::GatherEvidence
         } else {
             LoopDecision::Hold
         };
 
         CognitiveLoopResult {
             decision,
-            passes,
+            passes: 1,
             internal_questions: self.agenda.len(),
-            resolved_questions: resolved,
+            resolved_questions: 0,
             critique,
-            final_confidence: confidence.clamp(0.0, 1.0),
-            stopped_bounded: passes <= MAX_LOOP_PASSES,
+            final_confidence: confidence,
+            stopped_bounded: 1 <= MAX_LOOP_PASSES,
         }
     }
 
@@ -114,12 +114,10 @@ impl AutonomousCognitiveLoop {
     }
 }
 
-fn refine_confidence(current: f32, kind: InternalQuestionKind, critique: &AnswerCritique) -> f32 {
-    let gain = match kind {
-        InternalQuestionKind::MissingCause => 0.06,
-        InternalQuestionKind::CounterEvidence => 0.04,
-        InternalQuestionKind::AlternativeExplanation => 0.05,
-        InternalQuestionKind::ClarifyGoal => 0.03,
-    };
-    (current + gain * critique.evidence_sufficiency.max(0.35)).clamp(0.0, 0.94)
+fn finite_unit(value: f32) -> f32 {
+    if value.is_finite() {
+        value.clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
 }

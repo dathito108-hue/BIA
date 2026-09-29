@@ -60,13 +60,15 @@ impl SemanticReasoner {
     pub fn answer_query(&self, world: &WorldGraph, query: &SemanticQuery) -> OpenAnswer {
         match query.kind {
             QueryKind::Causal => {
-                let verdict = self.causal.infer(world, query.object.id);
+                let verdict = self
+                    .causal
+                    .infer_between(world, query.subject.id, query.object.id);
                 answer_causal(verdict, query.subject.id)
             }
             QueryKind::CounterfactualWithout => {
-                let verdict = self
-                    .causal
-                    .counterfactual_without(world, query.object.id, query.subject.id);
+                let verdict =
+                    self.causal
+                        .counterfactual_without(world, query.object.id, query.subject.id);
                 answer_counterfactual(verdict)
             }
         }

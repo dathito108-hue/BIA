@@ -54,6 +54,81 @@ impl CausalReasoner {
         self.infer_filtered(world, target, None, None)
     }
 
+    /// Query-scoped search: only paths starting at `source` can support or
+    /// oppose this claim. A stronger cause elsewhere is irrelevant to A -> B.
+    /// Work is capped by depth * beam * stored edges; no unbounded frontier.
+    pub fn infer_between(&self, world: &WorldGraph, source: u64, target: u64) -> ReasoningVerdict {
+        let mut frontier = vec![CausalPath {
+            nodes: vec![source],
+            score: 1.0,
+            inhibited: false,
+        }];
+        let mut support = 0.0_f32;
+        let mut opposition = 0.0_f32;
+        let mut best_path: Option<CausalPath> = None;
+        for _ in 0..self.max_depth {
+            let mut next = Vec::new();
+            for path in &frontier {
+                let head = *path.nodes.last().expect("nonempty causal path");
+                for edge in world
+                    .edges()
+                    .iter()
+                    .filter(|r| r.from == head && causal(r.kind))
+                {
+                    if path.nodes.contains(&edge.to) {
+                        continue;
+                    }
+                    let edge_strength = edge_score(edge);
+                    if !edge_strength.is_finite() || edge_strength <= 0.0 {
+                        continue;
+                    }
+                    let score = path.score.min(edge_strength);
+                    if score <= 0.0 {
+                        continue;
+                    }
+                    let mut candidate = path.clone();
+                    candidate.nodes.push(edge.to);
+                    candidate.score = score;
+                    candidate.inhibited ^= matches!(edge.kind, RelationKind::Inhibits);
+                    if edge.to == target {
+                        // Paths often share learned edges. Without independence
+                        // provenance, noisy-OR would double-count the evidence.
+                        if candidate.inhibited {
+                            opposition = opposition.max(score);
+                        } else {
+                            support = support.max(score);
+                        }
+                        if best_path.as_ref().is_none_or(|old| score > old.score) {
+                            best_path = Some(candidate);
+                        }
+                    } else {
+                        next.push(candidate);
+                        next.sort_by(score_desc);
+                        next.truncate(self.beam);
+                    }
+                }
+            }
+            if next.is_empty() {
+                break;
+            }
+            frontier = next;
+        }
+        let contradicted = support > 0.15 && opposition > 0.15;
+        let confidence = if contradicted {
+            (support - opposition).abs() * 0.65
+        } else {
+            support.max(opposition)
+        };
+        ReasoningVerdict {
+            target,
+            support,
+            opposition,
+            confidence,
+            contradicted,
+            best_path,
+        }
+    }
+
     pub fn infer_without_node(
         &self,
         world: &WorldGraph,
@@ -72,8 +147,7 @@ impl CausalReasoner {
     ) -> CounterfactualVerdict {
         let roots = causal_roots(world);
         let factual = self.infer_filtered(world, target, None, Some(&roots));
-        let counterfactual =
-            self.infer_filtered(world, target, Some(removed_node), Some(&roots));
+        let counterfactual = self.infer_filtered(world, target, Some(removed_node), Some(&roots));
         CounterfactualVerdict {
             support_delta: factual.support - counterfactual.support,
             opposition_delta: factual.opposition - counterfactual.opposition,

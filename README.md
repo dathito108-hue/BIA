@@ -350,3 +350,19 @@ This milestone connects BIA's reasoning, metacognition, evidence seeking, genera
 - **App version:** 1.28.0.
 
 The autonomous loop is bounded self-review over BIA's existing structured cognition. It does not grant unrestricted external autonomy, does not bypass user approval for side effects, and does not establish unrestricted AGI.
+
+
+## V129 — Evidence-grounded review and query-scoped causal reasoning
+
+This increment fixes measured correctness gaps in the V101 review and causal chat path:
+
+- Self-review cannot increase evidence sufficiency, erase conflict, or resolve a question merely by repeating a pass. With no evidence provider attached, it stops after one review and requests evidence; a later observation/query can produce a new verdict.
+- Unknown and contradictory answers always require evidence. Review confidence is capped by the answer, assessment and uncertainty. Each agenda belongs to its current query, preventing stale targets from filling its eight slots.
+- Causal A → B questions now search from A; stronger unrelated parents of B cannot replace A or create a spurious conflict about A. Paths may start inside a longer causal chain.
+- Query confidence uses the strongest supporting/opposing path, avoiding noisy-OR inflation when multiple paths share evidence. This deliberately does not assume independent sources.
+- Mobile chat routes unknown causal questions through review and explicit abstention, and supported/opposed wording respects the review confidence ceiling.
+- Search remains bounded by configured depth (maximum 8) and beam (maximum 32). Beam pruning can still miss paths in dense graphs; this is not exhaustive reasoning.
+- `cargo test --release --test grounded_cognition` covers repeated review, missing evidence, new evidence, stale agendas, distractors, shared paths, cycles, depth limits and mobile unknown replies. The source-specific test varies 128 graph fixtures in identity, chain depth and strength. Android `/loop` now also checks that self-review cannot fabricate evidence.
+- Android app version: 1.29.0.
+
+These are targeted improvements in BIA's explicit causal representation, not evidence of general-purpose or frontier-level intelligence. No on-phone latency improvement is claimed without device measurements.
