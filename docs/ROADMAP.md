@@ -15,22 +15,22 @@ Incremental concept formation from repeated phenomena, relation induction, contr
 
 **Acceptance:** learns new categories/relations from experience without global weight retraining.
 
-## D3 — Language as a Gate, Not the Mind
+## D3 — Language as a Gate, Not the Mind ✅
 Vietnamese-first byte/phoneme/word observation and expression layers that translate language into/from BIA phenomena and intentions.
 
 **Acceptance:** internal reasoning remains phenomenon/relation based; language adapter can be disabled.
 
-## D4 — Multi-Cảnh Perception
+## D4 — Multi-Cảnh Perception ✅
 Image/audio/sensor adapters produce normalized phenomena; cross-modal identity binding occurs in the Duyên graph.
 
 **Acceptance:** adapters remain replaceable and do not alter the BIA core.
 
-## D5 — Deep Quán and Planning
+## D5 — Deep Quán and Planning ✅
 Counterfactual branches, causal-chain search, goal decomposition, uncertainty-directed observation and explicit stop/abstain policy.
 
 **Acceptance:** bounded cycles; inspectable hypotheses; deterministic resource caps.
 
-## D6 — Cư Trần Action Fabric
+## D6 — Cư Trần Action Fabric ✅
 Typed tools and device actions, permission boundaries, consequence receipts and world feedback.
 
 **Acceptance:** cognition proposes; authority layer permits/denies; irreversible actions require explicit policy approval.
@@ -73,3 +73,14 @@ BIA is considered mature only when all of the following are demonstrated empiric
 D1 provides a versioned binary snapshot format with checksum verification, bounded decode limits, portable world/seed restoration and atomic checkpoint replacement.
 
 D2 provides bounded emergent concepts, prototype consolidation, contradiction-based confidence revision and temporal relation induction. These mechanisms operate on BIA phenomena and relations rather than on a hidden external model.
+
+
+### D3–D6 implementation note
+
+D3 introduces a Vietnamese language gate that maps text into BIA phenomena/intents and expresses concepts without making language the cognitive core.
+
+D4 introduces Multi-Cảnh binding across replaceable perception packets.
+
+D5 introduces bounded Deep Quán planning and counterfactual scoring.
+
+D6 introduces a typed Cư Trần authority policy separating cognition from permission: observation/reversible actions may pass policy while external-write and irreversible actions require authorization or are denied.
