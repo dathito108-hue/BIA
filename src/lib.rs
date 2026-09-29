@@ -39,7 +39,7 @@ pub use continuity::{decode_continuity, encode_continuity, ContinuityState};
 pub use core::{BiaDca, BiaDcaConfig};
 pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
-pub use evaluation::{run_v11_evaluation, run_v12_evaluation, V11Report, V12Report};
+pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, V11Report, V12Report, V14StressReport};
 pub use four_matrix::{
     adaptive_realm_weights, classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
     FourMatrixOutput, PerspectiveProjection, RealmBand, AGGREGATES,
@@ -688,6 +688,31 @@ mod tests {
         let report = run_v12_evaluation();
         assert!(report.passed(), "report={report:?}");
         assert_eq!(report.determinism_passes, report.held_out_cases);
+    }
+
+    #[test]
+    fn v14_stress_keeps_decoder_bounded_and_deterministic() {
+        let report = run_v14_stress(5_000);
+        assert!(report.passed(), "report={report:?}");
+    }
+
+    #[test]
+    fn decoder_survives_max_vocab_and_unicode_noise() {
+        let mut decoder = DuyenTokenDecoder::default();
+        for i in 0..300 {
+            let _ = decoder.learn_text(&format!("khainiem{i}"));
+        }
+        assert_eq!(decoder.learned_vocab_len(), 128);
+        for input in [
+            "😀🙏📱⚡",
+            "###@@@???",
+            "中文 русский العربية tiếng Việt",
+            &"a".repeat(10000),
+        ] {
+            let seq = decoder.generate(input, 48);
+            assert!(!seq.tokens.is_empty());
+            assert!(seq.tokens.len() <= 48);
+        }
     }
 
 }
