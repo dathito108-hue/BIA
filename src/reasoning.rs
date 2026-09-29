@@ -139,9 +139,26 @@ impl CausalReasoner {
             frontier = next;
         }
 
+        let completed: Vec<CausalPath> = all
+            .iter()
+            .filter(|path| {
+                let Some(&head) = path.nodes.first() else {
+                    return false;
+                };
+                let has_parent = world.edges().iter().any(|r| {
+                    r.to == head
+                        && causal(r.kind)
+                        && removed_node.is_none_or(|x| r.from != x && r.to != x)
+                });
+                !has_parent || path.nodes.len() >= self.max_depth + 1
+            })
+            .cloned()
+            .collect();
+        let scored_paths = if completed.is_empty() { &all } else { &completed };
+
         let mut support = 0.0f32;
         let mut opposition = 0.0f32;
-        for path in &all {
+        for path in scored_paths {
             if path.inhibited {
                 opposition = noisy_or(opposition, path.score);
             } else {
@@ -157,7 +174,7 @@ impl CausalReasoner {
             support.max(opposition).clamp(0.0, 1.0)
         };
 
-        let best_path = all.into_iter().max_by(|a, b| {
+        let best_path = scored_paths.iter().cloned().max_by(|a, b| {
             explanatory_rank(a)
                 .partial_cmp(&explanatory_rank(b))
                 .unwrap_or(std::cmp::Ordering::Equal)
