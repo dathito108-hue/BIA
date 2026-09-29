@@ -31,21 +31,29 @@ impl DuyenTokenDecoder {
             let realm = classify_realm(input);
             let fm = self.four.process(aggregates, realm);
 
-            let mut signals = Vec::with_capacity(16);
+            let mut signals = [MatrixSignal { lane: 0, value_q15: 0 }; 24];
+            let mut count = 0usize;
             for (i, v) in fm.conditioned.as_array().iter().enumerate() {
-                signals.push(MatrixSignal { lane: i as u8, value_q15: *v });
+                signals[count] = MatrixSignal { lane: i as u8, value_q15: *v };
+                count += 1;
             }
-            signals.push(MatrixSignal { lane: 8, value_q15: fm.projected.technical });
-            signals.push(MatrixSignal { lane: 9, value_q15: fm.projected.affective });
-            signals.push(MatrixSignal { lane: 10, value_q15: fm.projected.global });
+            for (lane, value) in [
+                (8u8, fm.projected.technical),
+                (9u8, fm.projected.affective),
+                (10u8, fm.projected.global),
+            ] {
+                signals[count] = MatrixSignal { lane, value_q15: value };
+                count += 1;
+            }
 
             for (i, v) in self.recurrent.iter().enumerate() {
-                if *v != 0 {
-                    signals.push(MatrixSignal { lane: (i + 4) as u8, value_q15: *v });
+                if *v != 0 && count < signals.len() {
+                    signals[count] = MatrixSignal { lane: (i + 4) as u8, value_q15: *v };
+                    count += 1;
                 }
             }
 
-            let decision = self.tam.infer(&signals);
+            let decision = self.tam.infer(&signals[..count]);
             let intent_bias = intent_class(input) as usize;
             let idx = ((decision.winner as usize * 7)
                 .wrapping_add(intent_bias * 5)
