@@ -1,26 +1,34 @@
 #![forbid(unsafe_code)]
 
 pub mod action;
+pub mod adaptation;
 pub mod budget;
 pub mod core;
+pub mod curriculum;
 pub mod language;
 pub mod meaning;
 pub mod perception;
 pub mod planning;
 pub mod memory;
+pub mod mobile;
 pub mod persistence;
+pub mod runtime;
 pub mod types;
 pub mod world;
 
 pub use action::{ActionDecision, ActionProposal, Authority, CuTranPolicy};
+pub use adaptation::{causal_credit, evaluate_delta, PromotionDecision, SkillDelta};
 pub use budget::{middle_way, Budget, DeviceState};
 pub use core::{BiaDca, BiaDcaConfig};
+pub use curriculum::{score as score_curriculum, CurriculumDomain, CurriculumScore, TrialResult};
 pub use language::{LanguageIntent, VietnameseGate};
 pub use meaning::{Concept, MeaningFormation};
 pub use perception::{MultiCanh, PerceptPacket};
 pub use planning::{DeepQuan, Plan, PlanStep};
 pub use memory::{Seed, SeedMemory};
+pub use mobile::{MobileReply, OfflineMobileBia};
 pub use persistence::{decode, encode, read_file, write_atomic, DharmaSnapshot, PersistenceError};
+pub use runtime::{CapacityTier, RuntimeProfile, RuntimeTarget};
 pub use types::*;
 pub use world::WorldGraph;
 
@@ -293,6 +301,71 @@ mod tests {
             CuTranPolicy::default().evaluate(p),
             ActionDecision::Denied(_)
         ));
+    }
+
+    #[test]
+    fn adaptation_promotes_only_measured_gain() {
+        let d = SkillDelta {
+            id: 1,
+            added_relations: vec![],
+            added_seeds: vec![],
+            score_before: 0.5,
+            score_after: 0.7,
+        };
+        assert_eq!(evaluate_delta(&d, 0.1), PromotionDecision::Promote);
+    }
+
+    #[test]
+    fn runtime_scales_capacity_not_architecture() {
+        let tiny = RuntimeProfile::for_memory_mb(RuntimeTarget::AndroidArm64, 128);
+        let mobile = RuntimeProfile::for_memory_mb(RuntimeTarget::AndroidArm64, 1024);
+        assert_eq!(tiny.tier, CapacityTier::Tiny);
+        assert_eq!(mobile.tier, CapacityTier::Mobile);
+        assert!(mobile.max_world_nodes > tiny.max_world_nodes);
+    }
+
+    #[test]
+    fn curriculum_scores_accuracy_and_calibration() {
+        let s = score_curriculum(
+            &[
+                TrialResult {
+                    domain: CurriculumDomain::Causality,
+                    correct: true,
+                    confidence: 0.9,
+                    latency_ms: 20,
+                    memory_kb: 200,
+                },
+                TrialResult {
+                    domain: CurriculumDomain::Planning,
+                    correct: true,
+                    confidence: 0.8,
+                    latency_ms: 30,
+                    memory_kb: 220,
+                },
+            ],
+            0.8,
+        );
+        assert!(s.passed);
+    }
+
+    #[test]
+    fn offline_mobile_conversation_runs_through_bia_core() {
+        let bia = BiaDca::new(BiaDcaConfig::default());
+        let mut app = OfflineMobileBia::new(bia);
+        let reply = app
+            .converse(
+                "Mở nhạc",
+                1,
+                DeviceState {
+                    battery: 0.8,
+                    thermal: 0.2,
+                    load: 0.2,
+                    available_memory_mb: 512,
+                },
+            )
+            .expect("reply");
+        assert!(!reply.text.is_empty());
+        assert!(app.bia.cycle() > 0);
     }
 
 }
