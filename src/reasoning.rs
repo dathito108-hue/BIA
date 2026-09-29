@@ -51,7 +51,7 @@ impl CausalReasoner {
     }
 
     pub fn infer(&self, world: &WorldGraph, target: u64) -> ReasoningVerdict {
-        self.infer_filtered(world, target, None)
+        self.infer_filtered(world, target, None, None)
     }
 
     pub fn infer_without_node(
@@ -60,7 +60,8 @@ impl CausalReasoner {
         target: u64,
         removed_node: u64,
     ) -> ReasoningVerdict {
-        self.infer_filtered(world, target, Some(removed_node))
+        let roots = causal_roots(world);
+        self.infer_filtered(world, target, Some(removed_node), Some(&roots))
     }
 
     pub fn counterfactual_without(
@@ -69,8 +70,10 @@ impl CausalReasoner {
         target: u64,
         removed_node: u64,
     ) -> CounterfactualVerdict {
-        let factual = self.infer(world, target);
-        let counterfactual = self.infer_without_node(world, target, removed_node);
+        let roots = causal_roots(world);
+        let factual = self.infer_filtered(world, target, None, Some(&roots));
+        let counterfactual =
+            self.infer_filtered(world, target, Some(removed_node), Some(&roots));
         CounterfactualVerdict {
             support_delta: factual.support - counterfactual.support,
             opposition_delta: factual.opposition - counterfactual.opposition,
@@ -85,6 +88,7 @@ impl CausalReasoner {
         world: &WorldGraph,
         target: u64,
         removed_node: Option<u64>,
+        fixed_roots: Option<&[u64]>,
     ) -> ReasoningVerdict {
         let mut frontier: Vec<CausalPath> = world
             .edges()
@@ -125,7 +129,7 @@ impl CausalReasoner {
                     nodes.extend_from_slice(&path.nodes);
                     next.push(CausalPath {
                         nodes,
-                        score: (path.score * edge_score(r)).clamp(0.0, 1.0),
+                        score: path.score.min(edge_score(r)),
                         inhibited: path.inhibited ^ matches!(r.kind, RelationKind::Inhibits),
                     });
                 }
@@ -145,6 +149,9 @@ impl CausalReasoner {
                 let Some(&head) = path.nodes.first() else {
                     return false;
                 };
+                if let Some(roots) = fixed_roots {
+                    return roots.contains(&head);
+                }
                 let has_parent = world.edges().iter().any(|r| {
                     r.to == head
                         && causal(r.kind)
@@ -154,7 +161,12 @@ impl CausalReasoner {
             })
             .cloned()
             .collect();
-        let scored_paths = if completed.is_empty() { &all } else { &completed };
+        let enforce_roots = fixed_roots.is_some();
+        let scored_paths = if completed.is_empty() && !enforce_roots {
+            &all
+        } else {
+            &completed
+        };
 
         let mut support = 0.0f32;
         let mut opposition = 0.0f32;
@@ -209,6 +221,21 @@ fn causal(kind: RelationKind) -> bool {
             | RelationKind::Inhibits
             | RelationKind::Follows
     )
+}
+
+fn causal_roots(world: &WorldGraph) -> Vec<u64> {
+    let mut roots = Vec::new();
+    for edge in world.edges().iter().filter(|r| causal(r.kind)) {
+        let candidate = edge.from;
+        let has_parent = world
+            .edges()
+            .iter()
+            .any(|r| r.to == candidate && causal(r.kind));
+        if !has_parent && !roots.contains(&candidate) {
+            roots.push(candidate);
+        }
+    }
+    roots
 }
 
 fn edge_score(r: &Relation) -> f32 {
