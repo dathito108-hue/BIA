@@ -1739,3 +1739,180 @@ pub fn run_v61_learned_semantic_evaluation() -> V61LearnedSemanticReport {
         elapsed: started.elapsed(),
     }
 }
+
+
+#[derive(Clone, Debug)]
+pub struct V81ContinualGenerativeReport {
+    pub cases: usize,
+    pub continual_passes: usize,
+    pub anchor_passes: usize,
+    pub composition_passes: usize,
+    pub symbol_passes: usize,
+    pub consolidation_passes: usize,
+    pub generation_passes: usize,
+    pub elapsed: Duration,
+}
+
+impl V81ContinualGenerativeReport {
+    pub fn passed(&self) -> bool {
+        self.continual_passes == self.cases
+            && self.anchor_passes == self.cases
+            && self.composition_passes == self.cases
+            && self.symbol_passes == self.cases
+            && self.consolidation_passes == self.cases
+            && self.generation_passes == self.cases
+    }
+
+    pub fn accuracy(&self) -> f32 {
+        let denom = (self.cases * 6).max(1) as f32;
+        (self.continual_passes
+            + self.anchor_passes
+            + self.composition_passes
+            + self.symbol_passes
+            + self.consolidation_passes
+            + self.generation_passes) as f32
+            / denom
+    }
+}
+
+pub fn run_v81_continual_generative_evaluation() -> V81ContinualGenerativeReport {
+    use crate::concept_composition::ConceptComposer;
+    use crate::continual_semantics::ContinualSemanticLearner;
+    use crate::generative_cognition::{GenerativeCognition, ResponseStance};
+    use crate::latent_symbol_bridge::LatentSymbolBridge;
+    use crate::open_reasoning::OpenAnswer;
+    use crate::semantic::concept_id;
+    use crate::semantic_consolidation::SemanticConsolidator;
+
+    let started = Instant::now();
+    let cases = 128usize;
+    let mut continual = 0usize;
+    let mut anchor = 0usize;
+    let mut composition = 0usize;
+    let mut symbol = 0usize;
+    let mut consolidation = 0usize;
+    let mut generation = 0usize;
+
+    for i in 0..cases {
+        let stable_id = concept_id(&format!("pin yeu may cham {i}"));
+        let near_id = concept_id(&format!("pin yeu thiet bi cham {i}"));
+        let mut learner = ContinualSemanticLearner::default();
+        learner.observe(stable_id, &format!("pin yeu gay ra may cham {i}"));
+        learner.observe(near_id, &format!("pin yeu gay nen thiet bi cham {i}"));
+        let before = learner.similarity(stable_id, near_id).unwrap_or(0.0);
+
+        for j in 0..48u64 {
+            learner.observe(
+                10_000 + i as u64 * 100 + j,
+                &format!("khai niem nhieu {i} {j} khac biet"),
+            );
+        }
+        let after = learner.similarity(stable_id, near_id).unwrap_or(0.0);
+        if before > 0.65 && after > 0.60 {
+            continual += 1;
+        }
+
+        let _ = learner.anchor(stable_id);
+        for k in 0..16 {
+            learner.observe(
+                stable_id,
+                &format!("pin yeu bien the rat khac {i} {k}"),
+            );
+        }
+        let restored = learner.restore_anchors(0.08);
+        if restored > 0
+            && learner
+                .concept(stable_id)
+                .is_some_and(|x| x.stability > 0.55)
+        {
+            anchor += 1;
+        }
+
+        let composer = ConceptComposer::default();
+        let related = composer
+            .compositional_similarity(
+                &["pin yeu", "may cham"],
+                "pin yeu gay ra may cham",
+            )
+            .unwrap_or(0.0);
+        let unrelated = composer
+            .compositional_similarity(
+                &["pin yeu", "may cham"],
+                "hoa sen no buoi sang",
+            )
+            .unwrap_or(1.0);
+        if related > unrelated {
+            composition += 1;
+        }
+
+        let mut bridge = LatentSymbolBridge::default();
+        bridge.bind(1, &format!("nhiet cao throttling {i}"), 0.95);
+        bridge.bind(2, &format!("hoa sen buoi sang {i}"), 0.95);
+        if bridge
+            .nearest_symbol(&format!("nhiet cao lam throttling {i}"))
+            .is_some_and(|(s, score)| s.id == 1 && score >= 0.50)
+        {
+            symbol += 1;
+        }
+
+        let mut consolidator = SemanticConsolidator::default();
+        let report = consolidator.consolidate(&mut learner, &[stable_id]);
+        if report.anchored == 1
+            && report.retained <= 96
+            && consolidator.passes() == 1
+        {
+            consolidation += 1;
+        }
+
+        let generator = GenerativeCognition;
+        let strong = generator.render(
+            &OpenAnswer::Supported {
+                confidence: 0.95,
+                path: vec![1, 2, 3],
+            },
+            0.05,
+        );
+        let weak = generator.render(
+            &OpenAnswer::Supported {
+                confidence: 0.62,
+                path: vec![1, 2, 3],
+            },
+            0.45,
+        );
+        let conflict = generator.render(
+            &OpenAnswer::Contradicted {
+                support: 0.82,
+                opposition: 0.78,
+            },
+            0.4,
+        );
+        let cf = generator.render(
+            &OpenAnswer::Counterfactual {
+                support_delta: 0.48,
+                factual_support: 0.90,
+                counterfactual_support: 0.42,
+            },
+            0.2,
+        );
+        if strong.stance == ResponseStance::Certain
+            && weak.stance == ResponseStance::Cautious
+            && conflict.stance == ResponseStance::Contradictory
+            && cf.stance == ResponseStance::Counterfactual
+            && strong.text != weak.text
+            && conflict.text != cf.text
+        {
+            generation += 1;
+        }
+    }
+
+    V81ContinualGenerativeReport {
+        cases,
+        continual_passes: continual,
+        anchor_passes: anchor,
+        composition_passes: composition,
+        symbol_passes: symbol,
+        consolidation_passes: consolidation,
+        generation_passes: generation,
+        elapsed: started.elapsed(),
+    }
+}
