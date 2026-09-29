@@ -44,9 +44,7 @@ impl MetacognitiveController {
             .clamp(0.0, 1.0);
         let evidence_gap = (1.0 - evidence_strength).clamp(0.0, 1.0);
 
-        let decision = if conflict >= 0.45 {
-            CognitiveDecision::SeekEvidence
-        } else if certainty < 0.35 && evidence_count < 2 {
+        let decision = if conflict >= 0.45 || (certainty < 0.35 && evidence_count < 2) {
             CognitiveDecision::SeekEvidence
         } else if complexity > 0.55 && certainty < 0.80 {
             CognitiveDecision::Deepen
