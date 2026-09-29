@@ -247,3 +247,138 @@ pub fn run_v14_stress(iterations: usize) -> V14StressReport {
         elapsed: start.elapsed(),
     }
 }
+
+
+#[derive(Clone, Debug)]
+pub struct V15ReasoningReport {
+    pub cases: usize,
+    pub multi_hop_passes: usize,
+    pub contradiction_passes: usize,
+    pub revision_passes: usize,
+    pub causal_persistence_passes: usize,
+    pub elapsed: Duration,
+}
+
+impl V15ReasoningReport {
+    pub fn passed(&self) -> bool {
+        self.multi_hop_passes == self.cases
+            && self.contradiction_passes == self.cases
+            && self.revision_passes == self.cases
+            && self.causal_persistence_passes == self.cases
+    }
+
+    pub fn accuracy(&self) -> f32 {
+        let denom = (self.cases * 4).max(1) as f32;
+        (self.multi_hop_passes
+            + self.contradiction_passes
+            + self.revision_passes
+            + self.causal_persistence_passes) as f32
+            / denom
+    }
+}
+
+pub fn run_v15_reasoning_evaluation() -> V15ReasoningReport {
+    use crate::reasoning::CausalReasoner;
+    use crate::types::{Relation, RelationKind};
+    use crate::world::WorldGraph;
+
+    let start = Instant::now();
+    let cases = 64usize;
+    let mut multi_hop = 0usize;
+    let mut contradiction = 0usize;
+    let mut revision = 0usize;
+    let mut persistence = 0usize;
+
+    for case in 0..cases {
+        let base = case as u64 * 100;
+        let a = base + 1;
+        let b = base + 2;
+        let c = base + 3;
+        let d = base + 4;
+        let e = base + 5;
+
+        let mut world = WorldGraph::new(64, 128);
+        world.relate(Relation {
+            from: a,
+            to: b,
+            kind: RelationKind::Causes,
+            strength: 0.95,
+            confidence: 0.95,
+        });
+        world.relate(Relation {
+            from: b,
+            to: c,
+            kind: RelationKind::Enables,
+            strength: 0.90,
+            confidence: 0.90,
+        });
+
+        let reasoner = CausalReasoner::new(4, 12);
+        let initial = reasoner.infer(&world, c);
+        if initial
+            .best_path
+            .as_ref()
+            .is_some_and(|p| p.nodes == vec![a, b, c] && !p.inhibited)
+            && initial.support > 0.60
+        {
+            multi_hop += 1;
+        }
+
+        world.relate(Relation {
+            from: d,
+            to: c,
+            kind: RelationKind::Inhibits,
+            strength: 0.88,
+            confidence: 0.92,
+        });
+        let conflicted = reasoner.infer(&world, c);
+        if conflicted.contradicted
+            && conflicted.support > 0.50
+            && conflicted.opposition > 0.50
+            && conflicted.confidence < initial.confidence
+        {
+            contradiction += 1;
+        }
+
+        let revised = reasoner.revise_with_relation(
+            &mut world,
+            Relation {
+                from: e,
+                to: c,
+                kind: RelationKind::Inhibits,
+                strength: 1.0,
+                confidence: 1.0,
+            },
+            c,
+        );
+        if revised.opposition > conflicted.opposition
+            && revised.opposition > revised.support
+            && revised.contradicted
+        {
+            revision += 1;
+        }
+
+        world.relate(Relation {
+            from: base + 40,
+            to: base + 41,
+            kind: RelationKind::Similar,
+            strength: 1.0,
+            confidence: 1.0,
+        });
+        let after_unrelated = reasoner.infer(&world, c);
+        if (after_unrelated.support - revised.support).abs() < 1e-6
+            && (after_unrelated.opposition - revised.opposition).abs() < 1e-6
+        {
+            persistence += 1;
+        }
+    }
+
+    V15ReasoningReport {
+        cases,
+        multi_hop_passes: multi_hop,
+        contradiction_passes: contradiction,
+        revision_passes: revision,
+        causal_persistence_passes: persistence,
+        elapsed: start.elapsed(),
+    }
+}
