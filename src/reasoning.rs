@@ -106,8 +106,8 @@ impl CausalReasoner {
         };
 
         let best_path = all.into_iter().max_by(|a, b| {
-            a.score
-                .partial_cmp(&b.score)
+            explanatory_rank(a)
+                .partial_cmp(&explanatory_rank(b))
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
@@ -148,6 +148,11 @@ fn edge_score(r: &Relation) -> f32 {
 
 fn noisy_or(current: f32, evidence: f32) -> f32 {
     (1.0 - (1.0 - current) * (1.0 - evidence)).clamp(0.0, 1.0)
+}
+
+fn explanatory_rank(path: &CausalPath) -> f32 {
+    let depth_bonus = 1.0 + 0.15 * path.nodes.len().saturating_sub(2) as f32;
+    path.score * depth_bonus
 }
 
 fn score_desc(a: &CausalPath, b: &CausalPath) -> std::cmp::Ordering {
