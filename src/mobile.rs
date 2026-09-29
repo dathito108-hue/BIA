@@ -41,6 +41,7 @@ pub struct OfflineMobileBia {
     queue: ActionQueue,
     pub integrated: crate::integrated_cognition::IntegratedCognition,
     pub execution: crate::skill_execution::SkillExecution,
+    execution_authority: crate::execution_authority::ExecutionAuthority,
 }
 
 impl OfflineMobileBia {
@@ -60,6 +61,7 @@ impl OfflineMobileBia {
             queue: ActionQueue::new(12),
             integrated: crate::integrated_cognition::IntegratedCognition::default(),
             execution: crate::skill_execution::SkillExecution::default(),
+            execution_authority: crate::execution_authority::ExecutionAuthority::default(),
         }
     }
 
@@ -75,7 +77,7 @@ impl OfflineMobileBia {
             timestamp,
         });
 
-        let execution_reply = self.execution_command(text);
+        let execution_reply = self.execution_command(text, timestamp);
         if let Some(reply) = execution_reply.or_else(|| self.integrated.handle(text)) {
             let focus = self
                 .language
@@ -338,11 +340,16 @@ impl OfflineMobileBia {
         self.tokens.emit_response(input, moment, response)
     }
 
-    fn execution_command(&mut self, text: &str) -> Option<String> {
+    fn execution_command(&mut self, text: &str, now: u64) -> Option<String> {
         let (head, body) = text.split_once(':').unwrap_or((text, ""));
         let normalized = crate::semantic::normalize(head);
         let head = normalized.trim();
+        if head == "tat tu duyet" || head == "dung tu dong" {
+            self.stop_automation();
+            return Some("Đã thu hồi quyền tự duyệt và dừng các bước chưa chạy. Bước chưa rõ kết quả vẫn được giữ để kiểm tra.".into());
+        }
         if head == "huy thuc thi" {
+            self.execution_authority.revoke();
             self.queue.clear();
             self.execution.cancel();
             return Some(
@@ -355,9 +362,10 @@ impl OfflineMobileBia {
                 "Có bước đang thực thi hoặc kết quả chưa xác định sau gián đoạn. Không tự chạy lại; hãy kiểm tra thiết bị rồi Hủy thực thi nếu cần.".into()
             } else {
                 format!(
-                    "Còn {} bước chờ duyệt; đã giữ {} biên nhận gần nhất.",
+                    "Còn {} bước; đã giữ {} biên nhận gần nhất. {}.",
                     self.queue.len(),
-                    self.execution.receipts.len()
+                    self.execution.receipts.len(),
+                    self.execution_authority.status(now)
                 )
             });
         }
@@ -365,6 +373,30 @@ impl OfflineMobileBia {
             self.integrated
                 .executable_skill(name)
                 .map(|a| vec![(name.to_string(), a)])
+        } else if head == "chay chuoi" {
+            let names: Vec<_> = body.split("->").map(crate::semantic::normalize).collect();
+            if names.is_empty() || names.len() > crate::execution_authority::MAX_BATCH {
+                None
+            } else {
+                names
+                    .iter()
+                    .map(|n| {
+                        self.integrated
+                            .executable_skill(n.trim())
+                            .map(|a| (n.trim().to_string(), a))
+                    })
+                    .collect()
+            }
+        } else if let Some(name) = head.strip_prefix("lap ky nang ") {
+            body.trim()
+                .parse::<usize>()
+                .ok()
+                .filter(|n| (1..=crate::execution_authority::MAX_BATCH).contains(n))
+                .and_then(|count| {
+                    self.integrated
+                        .executable_skill(name)
+                        .map(|a| vec![(name.to_string(), a); count])
+                })
         } else if head == "chay ke hoach" {
             self.integrated.executable_plan(body)
         } else {
@@ -385,7 +417,58 @@ impl OfflineMobileBia {
         for action in actions {
             self.queue.push(action);
         }
-        Some(format!("Đã chuẩn bị {count} bước thực thi thật. Hãy duyệt nội dung từng bước; thành công mở ứng dụng chỉ xác nhận hệ điều hành đã tiếp nhận, không chứng minh mục tiêu trong ứng dụng đã hoàn thành."))
+        Some(format!("Đã chuẩn bị {count} bước thực thi thật. Bạn có thể duyệt một bước, cả chuỗi hoặc cấp tự duyệt đúng thao tác trong phiên; thành công mở ứng dụng chỉ xác nhận hệ điều hành đã tiếp nhận, không chứng minh mục tiêu trong ứng dụng đã hoàn thành."))
+    }
+
+    /// Exact snapshot used both for display and approval, including IDs and payloads.
+    pub fn approval_snapshot(&self) -> String {
+        self.queue
+            .items()
+            .map(crate::capability::encode_action)
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+    pub fn approve_execution(
+        &mut self,
+        reviewed: &str,
+        mode: crate::execution_authority::ApprovalMode,
+        now: u64,
+    ) -> bool {
+        if self.execution.in_flight.is_some() || reviewed != self.approval_snapshot() {
+            return false;
+        }
+        self.execution_authority
+            .grant(&self.queue.items().cloned().collect::<Vec<_>>(), mode, now)
+    }
+    pub fn execution_is_approved(&self, id: u64, now: u64) -> bool {
+        self.execution.in_flight.is_none()
+            && self
+                .queue
+                .front()
+                .is_some_and(|a| a.id == id && self.execution_authority.permits(a, now))
+    }
+    pub fn claim_approved_action(&mut self, id: u64, now: u64) -> bool {
+        if !self.execution_is_approved(id, now) || !self.claim_device_action(id) {
+            return false;
+        }
+        self.execution_authority
+            .consume(self.queue.front().unwrap(), now)
+    }
+    pub fn execution_permission_status(&self, now: u64) -> String {
+        if self.execution.in_flight.is_some() {
+            return "Kết quả chưa rõ: không tự chạy lại".into();
+        }
+        self.execution_authority.status(now)
+    }
+    pub fn revoke_execution_approval(&mut self) {
+        self.execution_authority.revoke();
+    }
+    pub fn stop_automation(&mut self) {
+        self.execution_authority.revoke();
+        if self.execution.in_flight.is_none() {
+            self.queue.clear();
+            self.execution.cancel();
+        }
     }
 
     pub fn claim_device_action(&mut self, id: u64) -> bool {
@@ -407,6 +490,7 @@ impl OfflineMobileBia {
         self.execution.skills.retain(|s| s.0 != id);
         self.resolve_action_receipt(success, timestamp, false);
         if !success {
+            self.execution_authority.revoke();
             if let Some(name) = skill {
                 self.integrated.record_execution_failure(&name);
             }
@@ -421,6 +505,7 @@ impl OfflineMobileBia {
         }
         self.queue.clear();
         self.execution.cancel();
+        self.execution_authority.revoke();
         true
     }
 
@@ -503,6 +588,7 @@ impl OfflineMobileBia {
         else {
             return false;
         };
+        self.execution_authority.revoke();
         self.integrated = restored_cognition;
         self.execution = restored_execution;
         if let Some(goal) = state.active_goal {
