@@ -149,7 +149,9 @@ impl OfflineMobileBia {
         let mut reply = if semantic_scene.query.is_some()
             && !matches!(semantic_answer, OpenAnswer::Unknown)
         {
-            open_answer_text(&semantic_answer)
+            self.intelligence
+                .generate_thought(&semantic_answer, moment.uncertainty)
+                .text
         } else if let Some(lesson) = teaching {
             format!(
                 "Tôi đã ghi nhận “{}” cùng nguồn gốc và huân tập nó vào kinh nghiệm cục bộ.",
