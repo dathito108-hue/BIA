@@ -117,3 +117,19 @@ BIA now has a dedicated hot-path inference primitive inspired by the *three nest
 - **Asynchronous Android response:** the UI can render the immediate token first and run full native contemplation off the UI thread.
 
 This is not Transformer token prediction. The current token path is a deterministic BIA word-token emitter driven by the hierarchical inference state.
+
+
+## Inference V10 — Four-Matrix Cognitive Kernel
+
+The hot path now runs:
+
+`Realm Mask → Dependent Origination recurrence → Perspective Projection → Zero-State → Tam-Thien Matrix`
+
+- Realm Mask gates five bounded engineering channels inspired by the five aggregates.
+- Dependent Origination uses element-wise Q15 recurrent updates, not dense matrix multiplication.
+- Projection derives technical, affective and global views from one conditioned state.
+- Zero-State centers/prunes temporary scratch only; durable SeedMemory and KnowledgeLedger are not erased.
+- The output feeds the existing 16-lane Tam-Thien hierarchy and instant-token path.
+- All hot-path arrays are fixed size (5 and 16 lanes) and do not grow with context size.
+
+The Buddhist terminology is architectural inspiration, not a claim that Buddhist doctrine is a literal numerical model of cognition.
