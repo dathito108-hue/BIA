@@ -377,6 +377,34 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeEmergentV25(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeAutonomyV31(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let report = crate::run_v31_autonomous_knowledge_evaluation();
+    java_string(
+        &mut env,
+        format!(
+            "V31 autonomy: pass={}, cases={}, hierarchy={}/{}, hypothesis={}/{}, falsification={}/{}, meta_rule={}/{}, governance={}/{}, accuracy={:.3}, elapsed_us={}",
+            report.passed(),
+            report.cases,
+            report.hierarchy_passes,
+            report.cases,
+            report.hypothesis_passes,
+            report.cases,
+            report.falsification_passes,
+            report.cases,
+            report.meta_rule_passes,
+            report.cases,
+            report.governance_passes,
+            report.cases,
+            report.accuracy(),
+            report.elapsed.as_micros()
+        ),
+    )
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
