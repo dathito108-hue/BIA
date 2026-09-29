@@ -16,6 +16,8 @@ pub mod continuity;
 pub mod hierarchy;
 pub mod hybrid_semantic;
 pub mod competition;
+pub mod concept_composition;
+pub mod continual_semantics;
 pub mod core;
 pub mod dialogue;
 pub mod deliberation;
@@ -25,6 +27,7 @@ pub mod episodic;
 pub mod evaluation;
 pub mod curriculum;
 pub mod four_matrix;
+pub mod generative_cognition;
 pub mod goals;
 pub mod induction;
 pub mod inference_matrix;
@@ -32,6 +35,7 @@ pub mod knowledge;
 pub mod knowledge_governor;
 pub mod language;
 pub mod latent_memory;
+pub mod latent_symbol_bridge;
 pub mod latent_relation;
 pub mod meaning;
 pub mod metacognition;
@@ -51,6 +55,7 @@ pub mod rules;
 pub mod retrieval;
 pub mod semantic;
 pub mod semantic_compression;
+pub mod semantic_consolidation;
 pub mod semantic_embedding;
 pub mod runtime;
 pub mod self_directed_compute;
@@ -73,17 +78,20 @@ pub use calibration::{CalibrationEvent, SelfCalibration};
 pub use capability::{action_for_goal, encode_action, infer_device_action, DeviceAction, DeviceActionKind};
 pub use continuity::{decode_continuity, encode_continuity, ContinuityState};
 pub use competition::{CandidateHypothesis, CompetitionResult, HypothesisCompetition};
+pub use concept_composition::ConceptComposer;
+pub use continual_semantics::{ContinualConcept, ContinualSemanticLearner};
 pub use core::{BiaDca, BiaDcaConfig};
 pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
 pub use deliberation::{DeliberativePlanner, GoalSpec, PlanCandidate};
 pub use discovery::{ContextDiscovery, DiscoveredSimilarity};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
 pub use episodic::{Episode, EpisodeClause, EpisodicMemory};
-pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, run_v25_emergent_intelligence_evaluation, run_v31_autonomous_knowledge_evaluation, run_v37_deliberation_evaluation, run_v45_max_intelligence_evaluation, run_v61_learned_semantic_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport, V25EmergentIntelligenceReport, V31AutonomousKnowledgeReport, V37DeliberationReport, V45MaxIntelligenceReport, V61LearnedSemanticReport};
+pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, run_v25_emergent_intelligence_evaluation, run_v31_autonomous_knowledge_evaluation, run_v37_deliberation_evaluation, run_v45_max_intelligence_evaluation, run_v61_learned_semantic_evaluation, run_v81_continual_generative_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport, V25EmergentIntelligenceReport, V31AutonomousKnowledgeReport, V37DeliberationReport, V45MaxIntelligenceReport, V61LearnedSemanticReport, V81ContinualGenerativeReport};
 pub use four_matrix::{
     adaptive_realm_weights, classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
     FourMatrixOutput, PerspectiveProjection, RealmBand, AGGREGATES,
 };
+pub use generative_cognition::{GeneratedThought, GenerativeCognition, ResponseStance};
 pub use goals::{Goal, GoalStack, GoalStatus};
 pub use hierarchy::{AbstractConcept, HierarchicalAbstraction, RoleSignature};
 pub use hybrid_semantic::{HybridSemanticReasoner, LatentInference};
@@ -94,6 +102,7 @@ pub use knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
 pub use knowledge_governor::{KnowledgeAssessment, KnowledgeDecision, KnowledgeGovernor};
 pub use language::{LanguageIntent, VietnameseGate};
 pub use latent_memory::{LatentItem, LatentMemory};
+pub use latent_symbol_bridge::{LatentSymbolBridge, SemanticSymbol};
 pub use latent_relation::{LatentRelationLearner, RelationPrototype};
 pub use meaning::{Concept, MeaningFormation};
 pub use metacognition::{CognitiveAssessment, CognitiveDecision, MetacognitiveController};
@@ -113,6 +122,7 @@ pub use rules::{RuleSynthesizer, SynthesizedRule};
 pub use retrieval::{KnowledgeHit, SemanticRetriever};
 pub use semantic::{concept_id, QueryKind, SemanticClause, SemanticEntity, SemanticQuery, SemanticScene, VietnameseSemanticParser};
 pub use semantic_compression::{SemanticCentroid, SemanticCompressor};
+pub use semantic_consolidation::{ConsolidationReport, SemanticConsolidator};
 pub use semantic_embedding::{SemanticEncoder, SemanticVector, SEMANTIC_DIM};
 pub use runtime::{CapacityTier, RuntimeProfile, RuntimeTarget};
 pub use self_directed_compute::{ComputeRoute, ReasoningTier, SelfDirectedCompute};
@@ -1483,6 +1493,57 @@ mod tests {
     #[test]
     fn v61_learned_semantic_suite_passes() {
         let report = run_v61_learned_semantic_evaluation();
+        assert!(report.passed(), "report={report:?}");
+        assert_eq!(report.accuracy(), 1.0);
+    }
+
+    #[test]
+    fn continual_semantics_retains_related_concepts_under_interference() {
+        let a = concept_id("pin yeu gay ra may cham");
+        let b = concept_id("pin yeu gay nen thiet bi cham");
+        let mut learner = ContinualSemanticLearner::default();
+        learner.observe(a, "pin yeu gay ra may cham");
+        learner.observe(b, "pin yeu gay nen thiet bi cham");
+        let before = learner.similarity(a, b).unwrap();
+        for i in 0..48u64 {
+            learner.observe(10_000 + i, &format!("khai niem nhieu {i} khac biet"));
+        }
+        let after = learner.similarity(a, b).unwrap();
+        assert!(before > 0.65);
+        assert!(after > 0.60);
+    }
+
+    #[test]
+    fn anchored_concept_can_be_consolidated_after_drift() {
+        let id = concept_id("pin yeu");
+        let mut learner = ContinualSemanticLearner::default();
+        learner.observe(id, "pin yeu");
+        assert!(learner.anchor(id));
+        for i in 0..16 {
+            learner.observe(id, &format!("pin yeu bien the rat khac {i}"));
+        }
+        assert!(learner.restore_anchors(0.08) > 0);
+    }
+
+    #[test]
+    fn generative_cognition_changes_surface_with_reasoning_state() {
+        let g = GenerativeCognition;
+        let strong = g.render(
+            &OpenAnswer::Supported { confidence: 0.95, path: vec![1,2,3] },
+            0.05,
+        );
+        let weak = g.render(
+            &OpenAnswer::Supported { confidence: 0.62, path: vec![1,2,3] },
+            0.45,
+        );
+        assert_eq!(strong.stance, ResponseStance::Certain);
+        assert_eq!(weak.stance, ResponseStance::Cautious);
+        assert_ne!(strong.text, weak.text);
+    }
+
+    #[test]
+    fn v81_continual_generative_suite_passes() {
+        let report = run_v81_continual_generative_evaluation();
         assert!(report.passed(), "report={report:?}");
         assert_eq!(report.accuracy(), 1.0);
     }
