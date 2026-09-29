@@ -70,6 +70,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     public static native String nativeMaxIntelligenceV45();
     public static native String nativeLearnedSemanticV61();
     public static native String nativeContinualV81();
+    public static native String nativeAutonomousLoopV101();
     public static native long nativeCycleCount();
     public static native String nativeStatus();
     public static native boolean nativeSave(String path);
@@ -572,6 +573,18 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     refreshStatus();
                 });
             }, "bia-continual-generative-proof").start();
+            return;
+        }
+
+        if (text.equalsIgnoreCase("/loop") || text.equalsIgnoreCase("loop")) {
+            new Thread(() -> {
+                String report = nativeAutonomousLoopV101();
+                runOnUiThread(() -> {
+                    lastReply = report;
+                    addBubble(report, false);
+                    refreshStatus();
+                });
+            }, "bia-autonomous-loop-proof").start();
             return;
         }
 
