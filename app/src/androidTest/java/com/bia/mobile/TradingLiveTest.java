@@ -16,7 +16,7 @@ public final class TradingLiveTest extends InstrumentationTestCase {
         }
         try {
             assertTrue("Actual public WebSocket + actual REST candles required: "+f.snapshot(),ready);
-            synchronized(f){MarketFeed.Instrument i=f.instruments.get("BTCUSDT");System.out.println("BIA_LIVE_EVIDENCE source=Binance symbol=BTCUSDT eventMs="+i.eventMs+" price="+i.price+" candles="+i.candles.size()+" synthetic=false orders=disabled");}
+            synchronized(f){MarketFeed.Instrument i=f.instruments.get("BTCUSDT");String evidence="BIA_LIVE_EVIDENCE source=Binance symbol=BTCUSDT eventMs="+i.eventMs+" price="+i.price+" candles="+i.candles.size()+" synthetic=false orders=disabled";System.out.println(evidence);try(java.io.FileOutputStream out=new java.io.FileOutputStream(new java.io.File(getInstrumentation().getTargetContext().getExternalFilesDir(null),"market-evidence.txt"))){out.write(evidence.getBytes(java.nio.charset.StandardCharsets.UTF_8));}}
             assertFalse("Live JNI must leave warmup state",f.snapshot().contains("đang chờ nến từ nguồn"));
             getInstrumentation().runOnMainSync(()->a.stop.performClick());
             assertFalse(f.running);assertFalse(f.connected);assertNull(a.feed);

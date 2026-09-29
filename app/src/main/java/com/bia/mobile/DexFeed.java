@@ -21,7 +21,7 @@ final class DexFeed {
     final OkHttpClient client=new OkHttpClient.Builder().connectTimeout(10,TimeUnit.SECONDS).readTimeout(12,TimeUnit.SECONDS).callTimeout(15,TimeUnit.SECONDS).retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false).build();
     final ScheduledExecutorService worker=Executors.newSingleThreadScheduledExecutor();
     final ArrayDeque<Double> spots=new ArrayDeque<>();long lastBlockMs;double lastLiquidity;volatile boolean liquidityDrop;
-    volatile boolean running;volatile Snapshot latest;volatile String status="Chưa kết nối";
+    boolean cleanupStarted;volatile boolean running;volatile Snapshot latest;volatile String status="Chưa kết nối";
     DexFeed(int n,String p){if(n<0 || n>=2 || !p.matches("0x[0-9a-fA-F]{40}"))throw new IllegalArgumentException("Chọn mạng và địa chỉ pool V2 hợp lệ");network=n;pool=p.toLowerCase(Locale.ROOT);}
     void start(){running=true;status="Đang đọc blockchain thật…";worker.scheduleWithFixedDelay(this::refresh,0,15,TimeUnit.SECONDS);}
     Object rpc(String method,JSONArray params)throws Exception {
@@ -94,5 +94,5 @@ final class DexFeed {
         synchronized(spots){if(spots.size()>=6){double change=100*(spots.getLast()/spots.getFirst()-1);out.append("Biến động spot qua 6 snapshot: ").append(String.format(Locale.US,"%.4f%%",change)).append(" (token1/token0; quan sát, không phải tín hiệu mua/bán)\n");}else out.append("Đang tích lũy 6 snapshot on-chain để đo biến động\n");}
         return out+"ƯỚC TÍNH ON-CHAIN, KHÔNG PHẢI CAM KẾT KHỚP. Chưa xác minh honeypot, thuế token, blacklist, quyền owner, MEV, gas tổng hoặc khả năng bán. Block head chưa final. Không ký / gửi giao dịch.";
     }
-    void stop(){running=false;latest=null;status="ĐÃ DỪNG DEX";worker.shutdownNow();client.dispatcher().cancelAll();client.connectionPool().evictAll();client.dispatcher().executorService().shutdown();}
+    synchronized void stop(){running=false;latest=null;status="ĐÃ DỪNG DEX";worker.shutdownNow();if(!cleanupStarted){cleanupStarted=true;NetworkCleanup.close(client,null);}}
 }

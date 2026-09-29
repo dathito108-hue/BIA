@@ -27,7 +27,7 @@ final class MarketFeed {
     final ScheduledExecutorService scheduler=Executors.newSingleThreadScheduledExecutor();
     final Listener listener;final boolean twelve;final String key;
     volatile boolean running,connected;volatile String status="Chưa kết nối";
-    WebSocket socket;
+    WebSocket socket;boolean cleanupStarted;
     MarketFeed(boolean td,String symbols,String apiKey,Listener l){
         twelve=td;key=apiKey;listener=l;
         String[] list=symbols.toUpperCase(Locale.ROOT).split(",",-1);
@@ -133,5 +133,5 @@ final class MarketFeed {
         return out.toString();
     }
     private void fail(String reason){synchronized(this){if(!running)return;connected=false;status=reason;running=false;if(socket!=null)socket.cancel();}scheduler.shutdownNow();client.dispatcher().cancelAll();listener.changed();}
-    synchronized void stop(){running=false;connected=false;status="ĐÃ DỪNG — mọi tín hiệu vô hiệu";if(socket!=null)socket.cancel();client.dispatcher().cancelAll();scheduler.shutdownNow();client.connectionPool().evictAll();client.dispatcher().executorService().shutdown();}
+    synchronized void stop(){running=false;connected=false;status="ĐÃ DỪNG — mọi tín hiệu vô hiệu";scheduler.shutdownNow();if(!cleanupStarted){cleanupStarted=true;NetworkCleanup.close(client,socket);}}
 }
