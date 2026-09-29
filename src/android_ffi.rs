@@ -85,6 +85,34 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeResolveAction(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeExportContinuity(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let state = runtime()
+        .lock()
+        .map(|app| app.continuity_export())
+        .unwrap_or_default();
+    java_string(&mut env, state)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeImportContinuity(
+    mut env: JNIEnv,
+    _class: JClass,
+    state: JString,
+) -> jboolean {
+    let state = match env.get_string(&state) {
+        Ok(value) => value.to_string_lossy().into_owned(),
+        Err(_) => return 0,
+    };
+    runtime()
+        .lock()
+        .map(|mut app| if app.continuity_import(&state) { 1 } else { 0 })
+        .unwrap_or(0)
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
@@ -108,12 +136,18 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeStatus(
                 .active()
                 .map(|g| format!("  •  Mục tiêu {:.0}%", g.progress * 100.0))
                 .unwrap_or_default();
+            let queue = if app.queue_len() > 0 {
+                format!("  •  Hàng đợi {}", app.queue_len())
+            } else {
+                String::new()
+            };
             format!(
-                "Chu kỳ {}  •  Cảnh {}  •  Chủng tử {}{}",
+                "Chu kỳ {}  •  Cảnh {}  •  Chủng tử {}{}{}",
                 app.bia.cycle(),
                 app.bia.world.len(),
                 app.bia.memory.len(),
-                goal
+                goal,
+                queue
             )
         })
         .unwrap_or_else(|_| "BIA đang bận".to_string());
@@ -157,10 +191,12 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeLoad(
 
     match runtime().lock() {
         Ok(mut app) => {
+            let continuity = app.continuity_export();
             *app = OfflineMobileBia::new(BiaDca::from_snapshot(
                 BiaDcaConfig::default(),
                 snapshot,
             ));
+            let _ = app.continuity_import(&continuity);
             1
         }
         Err(_) => 0,
