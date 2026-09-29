@@ -3,12 +3,14 @@
 #[cfg(target_os = "android")]
 pub mod android_ffi;
 pub mod abstraction;
+pub mod active_evidence;
 pub mod autonomous_hypothesis;
 pub mod analogy;
 pub mod action;
 pub mod action_queue;
 pub mod adaptation;
 pub mod budget;
+pub mod calibration;
 pub mod capability;
 pub mod continuity;
 pub mod hierarchy;
@@ -29,6 +31,7 @@ pub mod knowledge;
 pub mod knowledge_governor;
 pub mod language;
 pub mod meaning;
+pub mod metacognition;
 pub mod meta_rules;
 pub mod perception;
 pub mod planner;
@@ -40,22 +43,27 @@ pub mod open_reasoning;
 pub mod outcome_learning;
 pub mod persistence;
 pub mod reasoning;
+pub mod recursive_deliberation;
 pub mod rules;
 pub mod retrieval;
 pub mod semantic;
 pub mod runtime;
+pub mod self_directed_compute;
+pub mod skill_transfer;
 pub mod token_stream;
 pub mod types;
 pub mod world;
 pub mod world_model;
 
 pub use abstraction::{ConceptAbstraction, ConceptGroup};
+pub use active_evidence::{ActiveEvidenceSeeker, EvidenceRequest, EvidenceRequestKind};
 pub use autonomous_hypothesis::AutonomousHypothesisGenerator;
 pub use action::{ActionDecision, ActionProposal, Authority, CuTranPolicy};
 pub use analogy::{AnalogicalHypothesis, AnalogicalReasoner};
 pub use action_queue::ActionQueue;
 pub use adaptation::{causal_credit, evaluate_delta, PromotionDecision, SkillDelta};
 pub use budget::{middle_way, Budget, DeviceState};
+pub use calibration::{CalibrationEvent, SelfCalibration};
 pub use capability::{action_for_goal, encode_action, infer_device_action, DeviceAction, DeviceActionKind};
 pub use continuity::{decode_continuity, encode_continuity, ContinuityState};
 pub use competition::{CandidateHypothesis, CompetitionResult, HypothesisCompetition};
@@ -65,7 +73,7 @@ pub use deliberation::{DeliberativePlanner, GoalSpec, PlanCandidate};
 pub use discovery::{ContextDiscovery, DiscoveredSimilarity};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
 pub use episodic::{Episode, EpisodeClause, EpisodicMemory};
-pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, run_v25_emergent_intelligence_evaluation, run_v31_autonomous_knowledge_evaluation, run_v37_deliberation_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport, V25EmergentIntelligenceReport, V31AutonomousKnowledgeReport, V37DeliberationReport};
+pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, run_v25_emergent_intelligence_evaluation, run_v31_autonomous_knowledge_evaluation, run_v37_deliberation_evaluation, run_v45_max_intelligence_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport, V25EmergentIntelligenceReport, V31AutonomousKnowledgeReport, V37DeliberationReport, V45MaxIntelligenceReport};
 pub use four_matrix::{
     adaptive_realm_weights, classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
     FourMatrixOutput, PerspectiveProjection, RealmBand, AGGREGATES,
@@ -79,6 +87,7 @@ pub use knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
 pub use knowledge_governor::{KnowledgeAssessment, KnowledgeDecision, KnowledgeGovernor};
 pub use language::{LanguageIntent, VietnameseGate};
 pub use meaning::{Concept, MeaningFormation};
+pub use metacognition::{CognitiveAssessment, CognitiveDecision, MetacognitiveController};
 pub use meta_rules::{MetaRule, MetaRuleCompressor};
 pub use perception::{MultiCanh, PerceptPacket};
 pub use planner::{decompose_goal, Plan as DevicePlan};
@@ -90,10 +99,13 @@ pub use open_reasoning::{OpenAnswer, SemanticReasoner};
 pub use outcome_learning::{OutcomeLearner, PredictionAudit};
 pub use persistence::{decode, encode, read_file, write_atomic, DharmaSnapshot, PersistenceError};
 pub use reasoning::{CausalPath, CausalReasoner, CounterfactualVerdict, ReasoningVerdict};
+pub use recursive_deliberation::{RecursiveDeliberator, RecursivePass, RecursiveResult};
 pub use rules::{RuleSynthesizer, SynthesizedRule};
 pub use retrieval::{KnowledgeHit, SemanticRetriever};
 pub use semantic::{concept_id, QueryKind, SemanticClause, SemanticEntity, SemanticQuery, SemanticScene, VietnameseSemanticParser};
 pub use runtime::{CapacityTier, RuntimeProfile, RuntimeTarget};
+pub use self_directed_compute::{ComputeRoute, ReasoningTier, SelfDirectedCompute};
+pub use skill_transfer::{CrossDomainTransfer, SkillPattern};
 pub use token_stream::{InstantToken, InstantTokenEmitter};
 pub use types::*;
 pub use world::WorldGraph;
@@ -1334,6 +1346,71 @@ mod tests {
     #[test]
     fn v37_deliberation_suite_passes() {
         let report = run_v37_deliberation_evaluation();
+        assert!(report.passed(), "report={report:?}");
+        assert_eq!(report.accuracy(), 1.0);
+    }
+
+    #[test]
+    fn metacognition_seeks_evidence_under_conflict() {
+        let controller = MetacognitiveController;
+        let a = controller.assess(0.82, 0.76, 4, 4);
+        assert_eq!(a.decision, CognitiveDecision::SeekEvidence);
+        assert!(a.conflict > 0.45);
+    }
+
+    #[test]
+    fn calibration_reduces_overconfidence_after_errors() {
+        let mut cal = SelfCalibration::default();
+        for _ in 0..8 {
+            cal.observe(0.9, false);
+        }
+        for _ in 0..8 {
+            cal.observe(0.8, true);
+        }
+        assert!(cal.bias() > 0.0);
+        assert!(cal.adjusted(0.82) < 0.82);
+    }
+
+    #[test]
+    fn recursive_deliberation_stops_when_gain_collapses() {
+        let result = RecursiveDeliberator::default().run(0.4, |depth, score| {
+            if depth <= 2 { score + 0.12 } else { score + 0.01 }
+        });
+        assert!(result.stopped_early);
+        assert!(result.passes.len() <= 4);
+        assert!(result.final_score > 0.6);
+    }
+
+    #[test]
+    fn self_directed_compute_degrades_under_device_pressure() {
+        let controller = MetacognitiveController;
+        let assessment = controller.assess(0.58, 0.08, 7, 4);
+        let router = SelfDirectedCompute;
+        let deep = router.route(
+            &assessment,
+            DeviceState {
+                battery: 0.9,
+                thermal: 0.1,
+                load: 0.1,
+                available_memory_mb: 1024,
+            },
+        );
+        let pressured = router.route(
+            &assessment,
+            DeviceState {
+                battery: 0.08,
+                thermal: 0.95,
+                load: 0.92,
+                available_memory_mb: 96,
+            },
+        );
+        assert_eq!(deep.tier, ReasoningTier::Deep);
+        assert_eq!(pressured.tier, ReasoningTier::Instant);
+    }
+
+    #[test]
+    fn v45_max_intelligence_suite_passes() {
+        let report = run_v45_max_intelligence_evaluation();
         assert!(report.passed(), "report={report:?}");
         assert_eq!(report.accuracy(), 1.0);
     }
