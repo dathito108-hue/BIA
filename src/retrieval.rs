@@ -67,7 +67,7 @@ fn overlap_score(query: &[String], record: &[String]) -> f32 {
         }
     }
     let coverage = matched as f32 / query.len() as f32;
-    let precision = matched as f32 / record.len().min(32).max(1) as f32;
+    let precision = matched as f32 / record.len().clamp(1, 32) as f32;
     (coverage * 0.75 + precision * 0.25).clamp(0.0, 1.0)
 }
 
