@@ -1,14 +1,14 @@
 use crate::action::{ActionDecision, ActionProposal, CuTranPolicy};
 use crate::action_queue::ActionQueue;
 use crate::budget::DeviceState;
-use crate::capability::{
-    action_for_goal, infer_device_action, DeviceAction, DeviceActionKind,
-};
+use crate::capability::{infer_device_action, DeviceAction, DeviceActionKind};
 use crate::continuity::{decode_continuity, encode_continuity, ContinuityState};
 use crate::core::BiaDca;
 use crate::dialogue::{DialogueContext, DialogueTurn, Speaker};
 use crate::goals::{GoalStack, GoalStatus};
+use crate::knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
 use crate::language::VietnameseGate;
+use crate::planner::decompose_goal;
 use crate::types::{CognitiveMoment, Phenomenon, SenseGate, WorldLevel};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -24,6 +24,7 @@ pub struct OfflineMobileBia {
     pub policy: CuTranPolicy,
     pub dialogue: DialogueContext,
     pub goals: GoalStack,
+    pub knowledge: KnowledgeLedger,
     queue: ActionQueue,
 }
 
@@ -35,7 +36,8 @@ impl OfflineMobileBia {
             policy: CuTranPolicy::default(),
             dialogue: DialogueContext::new(24),
             goals: GoalStack::new(16),
-            queue: ActionQueue::new(8),
+            knowledge: KnowledgeLedger::new(96),
+            queue: ActionQueue::new(12),
         }
     }
 
@@ -54,6 +56,12 @@ impl OfflineMobileBia {
         if let Some(goal) = extract_goal(text) {
             let id = stable_id(goal, timestamp);
             self.goals.set(id, goal.to_string(), timestamp);
+            if self.queue.is_empty() {
+                let plan = decompose_goal(goal, id);
+                for step in plan.steps {
+                    self.queue.push(step);
+                }
+            }
         }
 
         let teaching = extract_teaching(text);
@@ -69,10 +77,14 @@ impl OfflineMobileBia {
 
         let moment = self.bia.contemplate(focus.clone(), device, 0.7);
 
-        if teaching.is_some() {
-            if let Some(meaning) = moment.recognition.first().copied() {
-                self.bia.experience(&focus, meaning, 0.9, 0.0);
-            }
+        if let Some(lesson) = teaching {
+            self.ingest_content(
+                "user",
+                ProvenanceKind::User,
+                lesson,
+                timestamp,
+                0.95,
+            );
         }
 
         let direct = infer_device_action(text, stable_id(text, timestamp));
@@ -80,11 +92,12 @@ impl OfflineMobileBia {
             self.queue.push(action);
         } else if is_continue(text) && self.queue.is_empty() {
             if let Some(goal) = self.goals.active() {
-                if let Some(next) = action_for_goal(
+                let plan = decompose_goal(
                     &goal.description,
                     stable_id(&goal.description, timestamp),
-                ) {
-                    self.queue.push(next);
+                );
+                for step in plan.steps {
+                    self.queue.push(step);
                 }
             }
         }
@@ -93,14 +106,15 @@ impl OfflineMobileBia {
 
         let mut reply = if let Some(lesson) = teaching {
             format!(
-                "Tôi đã ghi nhận “{}” vào kinh nghiệm cục bộ và sẽ dùng nó như một duyên trong những lần quán sau.",
+                "Tôi đã ghi nhận “{}” cùng nguồn gốc và huân tập nó vào kinh nghiệm cục bộ.",
                 lesson.trim()
             )
         } else if let Some(goal) = self.goals.active() {
             if is_goal_command(text) {
                 format!(
-                    "Tôi đã nhận mục tiêu: “{}”. Tôi sẽ giữ nó làm duyên định hướng và có thể tiếp tục bằng nhiều bước.",
-                    goal.description
+                    "Tôi đã nhận mục tiêu: “{}”. Planner đã phân rã được {} bước có thể thực thi ngay.",
+                    goal.description,
+                    self.queue.len()
                 )
             } else {
                 self.language.respond(text, &moment)
@@ -111,8 +125,7 @@ impl OfflineMobileBia {
 
         if let Some(a) = &pending {
             reply.push_str(&format!(
-                " Hàng đợi hiện có {} hành động; bước kế tiếp là “{}”. Ứng dụng sẽ yêu cầu xác nhận.",
-                self.queue.len(),
+                " Bước kế tiếp là “{}”; mỗi tác động ra ngoài vẫn cần xác nhận.",
                 a.label
             ));
         }
@@ -128,6 +141,40 @@ impl OfflineMobileBia {
             moment,
             pending_action: pending,
         })
+    }
+
+    pub fn ingest_content(
+        &mut self,
+        source: &str,
+        kind: ProvenanceKind,
+        content: &str,
+        timestamp: u64,
+        confidence: f32,
+    ) -> usize {
+        let clean = content.trim();
+        if clean.is_empty() {
+            return 0;
+        }
+
+        let excerpt: String = clean.chars().take(4096).collect();
+        let id = stable_id(&format!("{source}:{excerpt}"), timestamp);
+        self.knowledge.add(KnowledgeRecord {
+            id,
+            source: source.to_string(),
+            kind,
+            excerpt: excerpt.clone(),
+            timestamp,
+            confidence: confidence.clamp(0.0, 1.0),
+        });
+
+        let phenomena = self.language.perceive(&excerpt, timestamp);
+        let mut count = 0usize;
+        for p in phenomena.into_iter().take(24) {
+            let meaning = self.bia.observe(p.clone());
+            self.bia.experience(&p, meaning, confidence.clamp(0.0, 1.0), 0.0);
+            count += 1;
+        }
+        count
     }
 
     pub fn pending_action(&self) -> Option<&DeviceAction> {
@@ -178,6 +225,7 @@ impl OfflineMobileBia {
         encode_continuity(&ContinuityState {
             active_goal: self.goals.active().cloned(),
             queued_actions: self.queue.items().cloned().collect(),
+            knowledge: self.knowledge.records().cloned().collect(),
         })
     }
 
@@ -191,6 +239,9 @@ impl OfflineMobileBia {
         self.queue.clear();
         for action in state.queued_actions {
             self.queue.push(action);
+        }
+        for record in state.knowledge {
+            self.knowledge.add(record);
         }
         true
     }
