@@ -59,6 +59,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     public static native String nativeImmediateToken(String input);
     public static native String nativeBenchmarkV12(int iterations);
+    public static native String nativeStressV14(int iterations);
     public static native long nativeCycleCount();
     public static native String nativeStatus();
     public static native boolean nativeSave(String path);
@@ -429,6 +430,18 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     refreshStatus();
                 });
             }, "bia-device-benchmark").start();
+            return;
+        }
+
+        if (text.equalsIgnoreCase("/stress") || text.equalsIgnoreCase("stress")) {
+            new Thread(() -> {
+                String report = nativeStressV14(10000);
+                runOnUiThread(() -> {
+                    lastReply = report;
+                    addBubble(report, false);
+                    refreshStatus();
+                });
+            }, "bia-device-stress").start();
             return;
         }
 
