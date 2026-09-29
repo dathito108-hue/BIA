@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <exclude domain="database" path="bia-trading-v137.db" />
+    <exclude domain="database" path="bia-trading-v137.db-wal" />
+    <exclude domain="database" path="bia-trading-v137.db-shm" />
+    <exclude domain="sharedpref" path="solana-orders.xml" />
+</full-backup-content>

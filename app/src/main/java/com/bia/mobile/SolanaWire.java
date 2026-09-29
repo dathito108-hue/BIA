@@ -3,7 +3,7 @@ package com.bia.mobile;
 import java.math.*;
 import java.util.*;
 
-/** Bounded wire checks; this is NOT a semantic decoder/audit of Jupiter instructions. */
+/** Message identity and signature checks. Semantic validation is in SolanaAudit. */
 final class SolanaWire {
     static final String ALPHABET="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
     static String base58(byte[] value) {
@@ -38,7 +38,7 @@ final class SolanaWire {
             blockhash=base58(Arrays.copyOfRange(message,p+count*32,p+count*32+32));
         }
         void unsigned(){for(int i=1;i<65;i++)if(bytes[i]!=0)throw new IllegalArgumentException("Báo giá chứa chữ ký ngoài dự kiến");}
-        Transaction signed(byte[] result,String owner){Transaction next=new Transaction(result,owner);if(!Arrays.equals(message,next.message))throw new IllegalArgumentException("Ví đã thay đổi nội dung giao dịch");boolean any=false;for(int i=1;i<65;i++)any|=result[i]!=0;if(!any)throw new IllegalArgumentException("Thiếu chữ ký ví");return next;}
+        Transaction signed(byte[] result,String owner){Transaction next=new Transaction(result,owner);if(!Arrays.equals(message,next.message))throw new IllegalArgumentException("Ví đã thay đổi nội dung giao dịch");boolean any=false;for(int i=1;i<65;i++)any|=result[i]!=0;if(!any || !org.bouncycastle.math.ec.rfc8032.Ed25519.verify(result,1,address(owner),0,message,0,message.length))throw new IllegalArgumentException("Chữ ký Ed25519 không hợp lệ");return next;}
         String signature(){return base58(Arrays.copyOfRange(bytes,1,65));}
     }
 }

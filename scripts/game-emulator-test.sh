@@ -8,8 +8,23 @@ adb shell wm dismiss-keyguard
 # Let that one-time work settle; production gesture deadlines stay unchanged.
 sleep 30
 adb logcat -c
+# Explicit test classes avoid legacy runner scanning every dependency DEX at startup.
+# Discover from test sources so new suites are not silently omitted.
+test_classes=$(python3 - <<'PYTEST'
+from pathlib import Path
+import re
+classes=[]
+for p in sorted(Path('app/src/androidTest/java').rglob('*Test.java')):
+    source=p.read_text()
+    package=re.search(r'package\s+([\w.]+)\s*;',source).group(1)
+    name=re.search(r'public\s+(?:final\s+)?class\s+(\w+)',source).group(1)
+    classes.append(package+'.'+name)
+assert classes
+print(','.join(classes))
+PYTEST
+)
 set +e
-adb shell am instrument -w -r com.bia.mobile.test/android.test.InstrumentationTestRunner | tee game-evidence/instrumentation.txt
+adb shell am instrument -w -r -e class "$test_classes" com.bia.mobile.test/android.test.InstrumentationTestRunner | tee game-evidence/instrumentation.txt
 instrument_status=${PIPESTATUS[0]}
 adb logcat -b crash -d > game-evidence/crash.txt
 adb logcat -d -t 3000 > game-evidence/logcat.txt
@@ -23,5 +38,5 @@ adb pull /sdcard/Android/data/com.bia.mobile/files/solana-evidence.txt game-evid
 python3 - <<'PY'
 from pathlib import Path
 s=Path('game-evidence/instrumentation.txt').read_text()
-assert 'OK (8 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, s
+assert 'OK (13 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, s
 PY

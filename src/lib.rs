@@ -1621,3 +1621,5 @@ pub mod execution_authority;
 pub mod game_agent;
 
 pub mod trading_live;
+
+pub mod trading_quality;

@@ -22,7 +22,7 @@ final class SolanaRpc implements AutoCloseable {
         }
     }
     Object call(String method,JSONArray params)throws Exception{
-        if(!java.util.Arrays.asList("getGenesisHash","getSlot","getBlockTime","getBalance","isBlockhashValid","getFeeForMessage","simulateTransaction","getSignatureStatuses").contains(method))throw new IllegalArgumentException("RPC chưa được cấp quyền");
+        if(!java.util.Arrays.asList("getAccountInfo","getMultipleAccounts","getTokenAccountsByOwner","getTransaction","getGenesisHash","getSlot","getBlockTime","getBalance","isBlockhashValid","getFeeForMessage","simulateTransaction","getSignatureStatuses").contains(method))throw new IllegalArgumentException("RPC chưa được cấp quyền");
         JSONObject body=object("jsonrpc","2.0","id",1,"method",method,"params",params);
         JSONObject r=request(new Request.Builder().url(URL).post(RequestBody.create(body.toString(),MediaType.get("application/json"))).build());
         if(r.has("error") || !r.has("result"))throw new IllegalStateException("RPC không trả kết quả hợp lệ");return r.get("result");
@@ -40,14 +40,13 @@ final class SolanaRpc implements AutoCloseable {
         String msg=android.util.Base64.encodeToString(tx.message,android.util.Base64.NO_WRAP);
         JSONObject fee=(JSONObject)call("getFeeForMessage",new JSONArray().put(msg).put(config));
         if(fee.isNull("value"))throw new IllegalStateException("Không tính được phí");long lamports=fee.getLong("value");if(lamports<0 || lamports>maxFee)throw new IllegalStateException("Phí vượt hạn mức");
-        String wire=android.util.Base64.encodeToString(tx.bytes,android.util.Base64.NO_WRAP);
-        JSONObject sim=(JSONObject)call("simulateTransaction",new JSONArray().put(wire).put(object("encoding","base64","commitment","confirmed","sigVerify",false,"replaceRecentBlockhash",false)));
-        if(!sim.getJSONObject("value").isNull("err"))throw new IllegalStateException("Preflight mainnet thất bại; không yêu cầu ký");return lamports;
+        return lamports;
     }
+
     String status(String signature)throws Exception{
         if(signature==null || !signature.matches("[1-9A-HJ-NP-Za-km-z]{64,88}"))throw new IllegalArgumentException("Chữ ký không hợp lệ");
         JSONObject r=(JSONObject)call("getSignatureStatuses",new JSONArray().put(new JSONArray().put(signature)).put(object("searchTransactionHistory",true)));
-        Object s=r.getJSONArray("value").get(0);if(s==JSONObject.NULL)return "UNKNOWN";JSONObject o=(JSONObject)s;if(!o.isNull("err"))return "FAILED";
+        Object s=r.getJSONArray("value").get(0);if(s==JSONObject.NULL)return "UNKNOWN";JSONObject o=(JSONObject)s;if(!o.isNull("err"))return "finalized".equals(o.optString("confirmationStatus"))?"FAILED":"FAILED_PENDING";
         String c=o.optString("confirmationStatus");return "finalized".equals(c)?"FINALIZED":"confirmed".equals(c)?"CONFIRMED":"PENDING";
     }
     public void close(){if(closed)return;closed=true;NetworkCleanup.close(http,null);}

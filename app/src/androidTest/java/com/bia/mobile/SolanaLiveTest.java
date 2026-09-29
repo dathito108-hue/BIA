@@ -14,7 +14,7 @@ public final class SolanaLiveTest extends InstrumentationTestCase {
         assertEquals("11111111111111111111111111111111",SolanaWire.base58(SolanaWire.address("11111111111111111111111111111111")));
         byte[] tx=new byte[135];tx[0]=1;tx[65]=1;tx[68]=1;System.arraycopy(SolanaWire.address(owner),0,tx,69,32);tx[134]=0;
         SolanaWire.Transaction t=new SolanaWire.Transaction(tx,owner);t.unsigned();
-        byte[] signed=tx.clone();signed[1]=7;assertNotNull(t.signed(signed,owner).signature());
+        byte[] signed=tx.clone();signed[1]=7;try{t.signed(signed,owner);fail("Invalid signature accepted");}catch(IllegalArgumentException expected){}
         signed[100]^=1;try{t.signed(signed,owner);fail("Changed message accepted");}catch(IllegalArgumentException expected){}
         try{new SolanaWire.Transaction(tx,SolanaOrder.SOL);fail("Changed payer accepted");}catch(IllegalArgumentException expected){}
         try{SolanaWire.units("0.0000001",6);fail("Rounded input accepted");}catch(IllegalArgumentException expected){}
