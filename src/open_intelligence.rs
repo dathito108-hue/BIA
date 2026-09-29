@@ -70,7 +70,7 @@ impl OpenIntelligence {
         let _ = self.abstraction.learn_from_text(text);
         let canonical = self.abstraction.canonicalize_text(text);
         let scene = self.semantic.ingest(world, &canonical, timestamp);
-        if scene.clauses.is_empty() {
+        if scene.clauses.is_empty() && !crate::semantic::unsupported_assertion(&canonical) {
             if let Some(inference) = self.hybrid.infer_clause(&self.latent_relations, &canonical) {
                 self.hybrid.apply(world, &inference);
             }

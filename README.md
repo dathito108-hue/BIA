@@ -392,3 +392,28 @@ document order and 24 distracting records per case. It measures this bounded fam
 not unrestricted language understanding or a general intelligence score. No phone
 latency claim is made from desktop/CI timing. Rules, existing graph provenance and
 retrieval/search caps still limit correctness outside these cases.
+
+## V131 — Integrated language, source revision, feedback, planning and transfer
+
+One bounded chat coordinator now connects the existing BIA semantic reasoner,
+cognitive review and world-model planner. See [Vietnamese command guide](docs/V131_GUIDE.md).
+
+- Additional Vietnamese causal paraphrases and inverse-cause wording; recognized
+  negation/uncertainty cannot fall through to positive latent relation learning.
+- Named observations/reports/hypotheses, explicit correction and withdrawal;
+  `Hỏi:` recomputes its answer from currently active managed sources and cites
+  the sources examined. Hypotheses are excluded from factual evidence.
+- Conservative single-topic pronoun resolution, with clarification on ambiguity.
+- Declarative skill simulation with preconditions/outcomes, goal/avoid constraints,
+  user-confirmed success/failure feedback and replanning away from failed skills.
+- Shared-outcome generalization to a new named case only after two distinct examples;
+  counterexamples/conflicting outcomes block transfer, and results remain hypotheses.
+- Bounded cognition journal persisted through existing mobile continuity; malformed
+  restore is atomic and never invokes device actions.
+- Planner ranks before branch pruning and prevents newly introduced avoid-facts.
+- Android 1.31.0 adds `/integrated`, a native 32-session combined evaluation.
+
+The managed-source commands are an explicit workspace within BIA, not an imported
+model/backend. `Hỏi:` does not silently mix legacy learned graph edges into a corrected
+source. Free-form language, unconstrained planning, genuine independent-source
+verification and autonomous execution of declared skills remain outside this release.

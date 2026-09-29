@@ -1,0 +1,538 @@
+//! Bounded integration of source-governed reasoning, feedback and simulation.
+//! Only direct chat commands reach this component; retrieved documents never do.
+use crate::autonomous_cognitive_loop::AutonomousCognitiveLoop;
+use crate::deliberation::{DeliberativePlanner, GoalSpec};
+use crate::generative_cognition::GenerativeCognition;
+use crate::metacognition::MetacognitiveController;
+use crate::open_reasoning::{OpenAnswer, SemanticReasoner};
+use crate::semantic::{concept_id, normalize, VietnameseSemanticParser};
+use crate::world::WorldGraph;
+use crate::world_model::{SimState, TransitionModel, WorldModel};
+
+const MAX_JOURNAL: usize = 128;
+const MAX_INPUT: usize = 1024;
+const MAX_SOURCES: usize = 32;
+const MAX_SKILLS: usize = 32;
+const MAX_EXAMPLES: usize = 64;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SourceKind {
+    Observation,
+    Report,
+    Hypothesis,
+}
+#[derive(Clone, Debug)]
+struct Source {
+    name: String,
+    text: String,
+    kind: SourceKind,
+}
+#[derive(Clone, Debug)]
+struct Skill {
+    name: String,
+    requires: Vec<u64>,
+    adds: Vec<u64>,
+    blocked: bool,
+    successes: u8,
+    failures: u8,
+}
+#[derive(Clone, Debug)]
+struct Example {
+    class: String,
+    instance: String,
+    outcome: String,
+    counter: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct IntegratedCognition {
+    sources: Vec<Source>,
+    skills: Vec<Skill>,
+    examples: Vec<Example>,
+    journal: Vec<String>,
+    topic: Option<String>,
+    last_plan: Option<(String, String)>,
+}
+
+impl IntegratedCognition {
+    /// Returns None for ordinary chat so the existing BIA pipeline remains canonical.
+    pub fn handle(&mut self, input: &str) -> Option<String> {
+        let folded = input
+            .split("->")
+            .map(normalize)
+            .collect::<Vec<_>>()
+            .join(" -> ");
+        let folded = folded.trim();
+        let (head, body) = folded.split_once(':').unwrap_or((folded, ""));
+        let head = head.trim();
+        let body = body.trim();
+        let mutation = [
+            "nguon ",
+            "quan sat ",
+            "gia thuyet ",
+            "dinh chinh ",
+            "rut nguon ",
+            "ky nang ",
+            "ket qua ",
+            "vi du ",
+            "phan vi du ",
+        ]
+        .iter()
+        .any(|p| head.starts_with(p));
+        let recognized = mutation
+            || head == "hoi"
+            || head == "lap ke hoach"
+            || head == "suy rong"
+            || head == "lap lai ke hoach";
+        if !recognized {
+            return None;
+        }
+        if input.chars().count() > MAX_INPUT {
+            return Some("Yêu cầu quá dài; hãy chia nhỏ dưới 1.024 ký tự.".into());
+        }
+        if mutation && self.journal.len() >= MAX_JOURNAL {
+            return Some(
+                "Bộ nhớ phiên đã đầy; tôi không ghi đè nguồn hay lịch sử đính chính.".into(),
+            );
+        }
+        let (reply, changed) = self.execute(head, body);
+        if changed {
+            self.journal.push(input.to_string());
+        }
+        Some(reply)
+    }
+
+    fn execute(&mut self, head: &str, body: &str) -> (String, bool) {
+        for (prefix, kind) in [
+            ("nguon ", SourceKind::Report),
+            ("quan sat ", SourceKind::Observation),
+            ("gia thuyet ", SourceKind::Hypothesis),
+        ] {
+            if let Some(name) = head.strip_prefix(prefix) {
+                if !valid_name(name) || body.is_empty() {
+                    return invalid();
+                }
+                if self.sources.iter().any(|s| s.name == name) {
+                    return (
+                        "Tên nguồn đã tồn tại; hãy dùng Đính chính để thay thế có chủ đích.".into(),
+                        false,
+                    );
+                }
+                if self.sources.len() >= MAX_SOURCES {
+                    return full();
+                }
+                self.update_topic(body);
+                self.sources.push(Source {
+                    name: name.into(),
+                    text: body.into(),
+                    kind,
+                });
+                return (
+                    if kind == SourceKind::Hypothesis {
+                        "Đã lưu giả thuyết; chưa dùng nó làm bằng chứng."
+                    } else {
+                        "Đã ghi nguồn riêng biệt để có thể kiểm tra hoặc đính chính."
+                    }
+                    .into(),
+                    true,
+                );
+            }
+        }
+        if let Some(name) = head.strip_prefix("dinh chinh ") {
+            if body.is_empty() {
+                return invalid();
+            }
+            let Some(source) = self.sources.iter_mut().find(|s| s.name == name) else {
+                return ("Không tìm thấy nguồn để đính chính.".into(), false);
+            };
+            source.text = body.into();
+            self.update_topic(body);
+            return (
+                "Đã thay nội dung nguồn. Những kết luận từ nội dung cũ sẽ được tính lại khi hỏi."
+                    .into(),
+                true,
+            );
+        }
+        if let Some(name) = head.strip_prefix("rut nguon ") {
+            let before = self.sources.len();
+            self.sources.retain(|s| s.name != name);
+            if self.sources.len() == before {
+                return ("Không tìm thấy nguồn.".into(), false);
+            }
+            self.topic = None;
+            return ("Đã rút nguồn; không còn dùng nó để suy luận.".into(), true);
+        }
+        if head == "hoi" {
+            return (self.answer(body), false);
+        }
+        if let Some(name) = head.strip_prefix("ky nang ") {
+            let Some((requires, adds)) = body.split_once(" -> ") else {
+                return invalid();
+            };
+            let (Some(requires), Some(adds)) = (facts(requires), facts(adds)) else {
+                return invalid();
+            };
+            if !valid_name(name) {
+                return invalid();
+            }
+            if self.skills.iter().any(|s| s.name == name) {
+                return (
+                    "Kỹ năng đã tồn tại; phản hồi kết quả sẽ điều chỉnh mức tin cậy.".into(),
+                    false,
+                );
+            }
+            if self.skills.len() >= MAX_SKILLS {
+                return full();
+            }
+            self.skills.push(Skill {
+                name: name.into(),
+                requires,
+                adds,
+                blocked: false,
+                successes: 0,
+                failures: 0,
+            });
+            return (
+                "Đã ghi mô tả kỹ năng để mô phỏng. Chưa thực thi thao tác nào.".into(),
+                true,
+            );
+        }
+        if let Some(name) = head.strip_prefix("ket qua ") {
+            let success = match body {
+                "thanh cong" => true,
+                "that bai" => false,
+                _ => return invalid(),
+            };
+            let Some(skill) = self.skills.iter_mut().find(|s| s.name == name) else {
+                return ("Không có kỹ năng tương ứng để ghi phản hồi.".into(), false);
+            };
+            if (success && skill.successes > 0 && !skill.blocked) || (!success && skill.blocked) {
+                return (
+                    "Phản hồi này đã được ghi; không tăng điểm vì lặp lại cùng trạng thái.".into(),
+                    false,
+                );
+            }
+            if success {
+                skill.successes = skill.successes.saturating_add(1);
+                skill.blocked = false;
+            } else {
+                skill.failures = skill.failures.saturating_add(1);
+                skill.blocked = true;
+            }
+            let mut reply =
+                "Đã ghi kết quả do bạn xác nhận; tôi chưa tự kiểm chứng trên thiết bị.".to_string();
+            if let Some((start, goal)) = self.last_plan.clone() {
+                reply.push(' ');
+                reply.push_str(&self.plan(&start, &goal));
+            }
+            return (reply, true);
+        }
+        if head == "lap ke hoach" {
+            let Some((start, goal)) = body.split_once(" -> ") else {
+                return invalid();
+            };
+            if facts(start).is_none() || goal_facts(goal).is_none() {
+                return invalid();
+            }
+            self.last_plan = Some((start.into(), goal.into()));
+            return (self.plan(start, goal), false);
+        }
+        if head == "lap lai ke hoach" {
+            return (
+                match self.last_plan.clone() {
+                    Some((start, goal)) => self.plan(&start, &goal),
+                    None => "Chưa có kế hoạch trong phiên này.".into(),
+                },
+                false,
+            );
+        }
+        for (prefix, counter) in [("vi du ", false), ("phan vi du ", true)] {
+            if let Some(class) = head.strip_prefix(prefix) {
+                let Some((instance, outcome)) = body.split_once(" -> ") else {
+                    return invalid();
+                };
+                let (instance, outcome) = (instance.trim(), outcome.trim());
+                if !valid_name(class) || !valid_name(instance) || !valid_name(outcome) {
+                    return invalid();
+                }
+                if let Some(old) = self
+                    .examples
+                    .iter_mut()
+                    .find(|e| e.class == class && e.instance == instance)
+                {
+                    if old.outcome == outcome && old.counter == counter {
+                        return (
+                            "Ví dụ này đã có; không tính lặp thành bằng chứng mới.".into(),
+                            false,
+                        );
+                    }
+                    old.outcome = outcome.into();
+                    old.counter = counter;
+                } else {
+                    if self.examples.len() >= MAX_EXAMPLES {
+                        return full();
+                    }
+                    self.examples.push(Example {
+                        class: class.into(),
+                        instance: instance.into(),
+                        outcome: outcome.into(),
+                        counter,
+                    });
+                }
+                return ("Đã cập nhật ví dụ; suy rộng cần ít nhất hai trường hợp khác nhau và không có phản ví dụ.".into(), true);
+            }
+        }
+        if head == "suy rong" {
+            let Some((class, target)) = body.split_once(" cho ") else {
+                return invalid();
+            };
+            let examples: Vec<_> = self
+                .examples
+                .iter()
+                .filter(|e| e.class == class.trim())
+                .collect();
+            if !valid_name(target) || examples.iter().any(|e| e.instance == target.trim()) {
+                return (
+                    "Hãy chọn một trường hợp mới chưa nằm trong các ví dụ.".into(),
+                    false,
+                );
+            }
+            if examples.len() < 2 {
+                return (
+                    "Chưa đủ hai ví dụ khác nhau theo tên trường hợp để suy rộng.".into(),
+                    false,
+                );
+            }
+            if examples
+                .iter()
+                .any(|e| e.counter || e.outcome != examples[0].outcome)
+            {
+                return (
+                    "Có phản ví dụ hoặc kết quả khác nhau; tôi tạm giữ suy rộng.".into(),
+                    false,
+                );
+            }
+            return (format!("Giả thuyết cho {}: có thể đạt {} theo {} ví dụ khác nhau của lớp {}. Cần kiểm chứng; chưa ghi thành sự thật hay kỹ năng thực thi.",
+                target.trim(), examples[0].outcome, examples.len(), class.trim()), false);
+        }
+        invalid()
+    }
+
+    fn update_topic(&mut self, text: &str) {
+        let scene = VietnameseSemanticParser.parse(text);
+        self.topic = if scene.clauses.len() == 1 {
+            Some(scene.clauses[0].subject.text.clone())
+        } else {
+            None
+        };
+    }
+
+    fn answer(&mut self, question: &str) -> String {
+        let mut question = question.to_string();
+        for prefix in ["no ", "dieu do "] {
+            if let Some(rest) = question.strip_prefix(prefix) {
+                let Some(topic) = &self.topic else {
+                    return "“Nó/điều đó” chưa rõ chỉ đối tượng nào; hãy nêu tên cụ thể.".into();
+                };
+                question = format!("{topic} {rest}");
+                break;
+            }
+        }
+        let reasoner = SemanticReasoner::default();
+        let scene = reasoner.parse(&question);
+        let Some(query) = &scene.query else {
+            return "Tôi chưa phân tích được câu hỏi này; thử “A có dẫn tới B không?”.".into();
+        };
+        self.topic = Some(query.subject.text.clone());
+        let mut world = WorldGraph::new(1024, 512);
+        let mut consulted = Vec::new();
+        for source in &self.sources {
+            if source.kind == SourceKind::Hypothesis {
+                continue;
+            }
+            let mut parsed = reasoner.parse(&source.text);
+            parsed.query = None;
+            parsed.clauses.truncate(8);
+            let quality: f32 = if source.kind == SourceKind::Observation {
+                0.95
+            } else {
+                0.75
+            };
+            for clause in &mut parsed.clauses {
+                clause.confidence *= quality.sqrt();
+            }
+            VietnameseSemanticParser.ingest(&mut world, &parsed, 0);
+            if !parsed.clauses.is_empty() {
+                consulted.push(source.name.as_str());
+            }
+        }
+        let mut answer = reasoner.answer_scene(&world, &scene);
+        let (support, opposition, depth, evidence) = match &answer {
+            OpenAnswer::Supported { confidence, path } => {
+                (*confidence, 0.0, path.len(), path.len().saturating_sub(1))
+            }
+            OpenAnswer::Opposed { confidence, path } => {
+                (0.0, *confidence, path.len(), path.len().saturating_sub(1))
+            }
+            OpenAnswer::Contradicted {
+                support,
+                opposition,
+            } => (*support, *opposition, 2, 2),
+            OpenAnswer::Counterfactual {
+                factual_support,
+                counterfactual_support,
+                ..
+            } => (*factual_support, *counterfactual_support, 2, 2),
+            OpenAnswer::Unknown => (0.0, 0.0, 0, 0),
+        };
+        let assessment = MetacognitiveController.assess(support, opposition, depth, evidence);
+        let review = AutonomousCognitiveLoop::default().run(
+            query.object.id,
+            &answer,
+            &assessment,
+            0.15,
+            evidence,
+        );
+        match &mut answer {
+            OpenAnswer::Supported { confidence, .. } | OpenAnswer::Opposed { confidence, .. } => {
+                *confidence = confidence.min(review.final_confidence)
+            }
+            _ => {}
+        }
+        let mut text = GenerativeCognition
+            .render(&answer, 1.0 - review.final_confidence)
+            .text;
+        if !consulted.is_empty() {
+            text.push_str(&format!(" Đã xét các nguồn: {}.", consulted.join(", ")));
+        }
+        text
+    }
+
+    fn plan(&self, start: &str, goal: &str) -> String {
+        let (Some(start), Some(goal)) = (facts(start), goal_facts(goal)) else {
+            return invalid().0;
+        };
+        let mut model = WorldModel::default();
+        for skill in self.skills.iter().filter(|s| !s.blocked) {
+            model.add_transition(TransitionModel {
+                action: concept_id(&skill.name),
+                requires: skill.requires.clone(),
+                adds: skill.adds.clone(),
+                removes: Vec::new(),
+                utility: 0.0,
+                cost: 0.1,
+                confidence: ((2.0 + f32::from(skill.successes))
+                    / (3.0 + f32::from(skill.successes) + f32::from(skill.failures)))
+                .min(0.95),
+            });
+        }
+        let Some(plan) = DeliberativePlanner.plan(&model, &SimState::new(start), &goal) else {
+            return "Chưa tìm được kế hoạch trong giới hạn hiện tại; cần thêm kỹ năng hoặc điều kiện.".into();
+        };
+        if !plan.reached_goal {
+            return "Chỉ tìm được phương án một phần; chưa đạt mục tiêu nên chưa đề xuất thực thi."
+                .into();
+        }
+        if plan.actions.is_empty() {
+            return "Các điều kiện đã đáp ứng mục tiêu; không cần thêm bước.".into();
+        }
+        let names: Vec<_> = plan
+            .actions
+            .iter()
+            .filter_map(|id| {
+                self.skills
+                    .iter()
+                    .find(|s| concept_id(&s.name) == *id)
+                    .map(|s| s.name.as_str())
+            })
+            .collect();
+        format!("Kế hoạch mô phỏng: {}. Đạt mục tiêu trong mô hình đã khai báo; chưa thực thi trên thiết bị.", names.join(" → "))
+    }
+
+    pub fn journal_len(&self) -> usize {
+        self.journal.len()
+    }
+    pub fn export(&self) -> String {
+        self.journal
+            .iter()
+            .map(|line| format!("J131\t{}", hex(line.as_bytes())))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+    /// Decode atomically and replay only bounded cognition commands, never tools.
+    pub fn restore(&mut self, text: &str) -> bool {
+        let lines: Vec<_> = text
+            .lines()
+            .filter_map(|l| l.strip_prefix("J131\t"))
+            .take(MAX_JOURNAL + 1)
+            .collect();
+        if lines.len() > MAX_JOURNAL {
+            return false;
+        }
+        let mut next = Self::default();
+        for line in lines {
+            let Some(command) = unhex(line) else {
+                return false;
+            };
+            let before = next.journal.len();
+            if next.handle(&command).is_none() || next.journal.len() != before + 1 {
+                return false;
+            }
+        }
+        *self = next;
+        true
+    }
+}
+
+fn valid_name(s: &str) -> bool {
+    !s.trim().is_empty() && s.chars().count() <= 80
+}
+fn invalid() -> (String, bool) {
+    (
+        "Cú pháp chưa đủ rõ; hãy kiểm tra tên, dấu hai chấm và các điều kiện.".into(),
+        false,
+    )
+}
+fn full() -> (String, bool) {
+    (
+        "Đã đạt giới hạn bộ nhớ cấu trúc; chưa ghi thêm dữ liệu.".into(),
+        false,
+    )
+}
+fn facts(text: &str) -> Option<Vec<u64>> {
+    let items: Vec<_> = text.split(',').map(str::trim).collect();
+    if items.is_empty() || items.len() > 8 || items.iter().any(|s| !valid_name(s)) {
+        return None;
+    }
+    Some(items.into_iter().map(concept_id).collect())
+}
+fn goal_facts(text: &str) -> Option<GoalSpec> {
+    let (desired, avoid) = text.split_once("; tranh ").unwrap_or((text, ""));
+    Some(GoalSpec {
+        desired: facts(desired)?,
+        avoid: if avoid.is_empty() {
+            Vec::new()
+        } else {
+            facts(avoid)?
+        },
+    })
+}
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+fn unhex(text: &str) -> Option<String> {
+    if text.len() > MAX_INPUT * 8 || !text.len().is_multiple_of(2) || !text.is_ascii() {
+        return None;
+    }
+    let bytes: Option<Vec<u8>> = text
+        .as_bytes()
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|p| {
+            let s = std::str::from_utf8(p).ok()?;
+            u8::from_str_radix(s, 16).ok()
+        })
+        .collect();
+    String::from_utf8(bytes?).ok()
+}

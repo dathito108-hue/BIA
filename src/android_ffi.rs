@@ -567,6 +567,20 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeEvidenceV130(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeIntegratedV131(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let report = crate::integrated_evaluation::run_integrated_evaluation();
+    java_string(&mut env, format!(
+        "V131 integrated: pass={}, cases={}, language={}, revision={}, feedback={}, planning={}, transfer={}, continuity={}, elapsed_ms={}",
+        report.passed(), report.cases, report.language, report.revision,
+        report.feedback, report.planning, report.transfer, report.continuity,
+        report.elapsed.as_millis()
+    ))
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
