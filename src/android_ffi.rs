@@ -7,18 +7,13 @@ use jni::sys::{jboolean, jfloat, jint, jlong, jstring};
 use jni::JNIEnv;
 
 use crate::{
-    encode_action, read_file, write_atomic, BiaDca, BiaDcaConfig, DeviceState,
-    OfflineMobileBia,
+    encode_action, read_file, write_atomic, BiaDca, BiaDcaConfig, DeviceState, OfflineMobileBia,
 };
 
 static RUNTIME: OnceLock<Mutex<OfflineMobileBia>> = OnceLock::new();
 
 fn runtime() -> &'static Mutex<OfflineMobileBia> {
-    RUNTIME.get_or_init(|| {
-        Mutex::new(OfflineMobileBia::new(BiaDca::new(
-            BiaDcaConfig::default(),
-        )))
-    })
+    RUNTIME.get_or_init(|| Mutex::new(OfflineMobileBia::new(BiaDca::new(BiaDcaConfig::default()))))
 }
 
 fn java_string(env: &mut JNIEnv, value: String) -> jstring {
@@ -93,15 +88,62 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativePendingAction(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeResolveAction(
-    _env: JNIEnv,
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeClaimAction(
+    mut env: JNIEnv,
     _class: JClass,
+    id: JString,
+) -> jboolean {
+    let Some(id) = env
+        .get_string(&id)
+        .ok()
+        .and_then(|s| s.to_string_lossy().parse::<u64>().ok())
+    else {
+        return 0;
+    };
+    runtime()
+        .lock()
+        .map(|mut app| u8::from(app.claim_device_action(id)))
+        .unwrap_or(0)
+}
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCompleteAction(
+    mut env: JNIEnv,
+    _class: JClass,
+    id: JString,
     success: jboolean,
     timestamp: jlong,
-) {
-    if let Ok(mut app) = runtime().lock() {
-        app.resolve_pending_action(success != 0, timestamp.max(0) as u64);
-    }
+) -> jboolean {
+    let Some(id) = env
+        .get_string(&id)
+        .ok()
+        .and_then(|s| s.to_string_lossy().parse::<u64>().ok())
+    else {
+        return 0;
+    };
+    runtime()
+        .lock()
+        .map(|mut app| {
+            u8::from(app.complete_device_action(id, success != 0, timestamp.max(0) as u64))
+        })
+        .unwrap_or(0)
+}
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCancelAction(
+    mut env: JNIEnv,
+    _class: JClass,
+    id: JString,
+) -> jboolean {
+    let Some(id) = env
+        .get_string(&id)
+        .ok()
+        .and_then(|s| s.to_string_lossy().parse::<u64>().ok())
+    else {
+        return 0;
+    };
+    runtime()
+        .lock()
+        .map(|mut app| u8::from(app.cancel_device_action(id)))
+        .unwrap_or(0)
 }
 
 #[no_mangle]
@@ -662,10 +704,7 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeLoad(
     match runtime().lock() {
         Ok(mut app) => {
             let continuity = app.continuity_export();
-            *app = OfflineMobileBia::new(BiaDca::from_snapshot(
-                BiaDcaConfig::default(),
-                snapshot,
-            ));
+            *app = OfflineMobileBia::new(BiaDca::from_snapshot(BiaDcaConfig::default(), snapshot));
             let _ = app.continuity_import(&continuity);
             1
         }

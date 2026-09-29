@@ -1,5 +1,6 @@
 use crate::action::{ActionDecision, ActionProposal, CuTranPolicy};
 use crate::action_queue::ActionQueue;
+use crate::autonomous_cognitive_loop::{CognitiveLoopInput, LoopDecision};
 use crate::budget::DeviceState;
 use crate::capability::{infer_device_action, DeviceAction, DeviceActionKind};
 use crate::continuity::{decode_continuity, encode_continuity, ContinuityState};
@@ -7,15 +8,14 @@ use crate::core::BiaDca;
 use crate::dialogue::{DialogueContext, DialogueTurn, Speaker};
 use crate::duyen_token::DuyenTokenDecoder;
 use crate::goals::{GoalStack, GoalStatus};
+use crate::idle_cognition::IdleCognitiveTask;
 use crate::knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
 use crate::language::VietnameseGate;
 use crate::open_intelligence::OpenIntelligence;
 use crate::open_reasoning::OpenAnswer;
-use crate::autonomous_cognitive_loop::{CognitiveLoopInput, LoopDecision};
-use crate::idle_cognition::IdleCognitiveTask;
-use crate::token_stream::{InstantToken, InstantTokenEmitter};
 use crate::planner::decompose_goal;
 use crate::retrieval::SemanticRetriever;
+use crate::token_stream::{InstantToken, InstantTokenEmitter};
 use crate::types::{CognitiveMoment, Phenomenon, SenseGate, WorldLevel};
 use crate::vector_retrieval::VectorSemanticRetriever;
 
@@ -40,6 +40,7 @@ pub struct OfflineMobileBia {
     pub vector_retriever: VectorSemanticRetriever,
     queue: ActionQueue,
     pub integrated: crate::integrated_cognition::IntegratedCognition,
+    pub execution: crate::skill_execution::SkillExecution,
 }
 
 impl OfflineMobileBia {
@@ -58,6 +59,7 @@ impl OfflineMobileBia {
             vector_retriever: VectorSemanticRetriever::default(),
             queue: ActionQueue::new(12),
             integrated: crate::integrated_cognition::IntegratedCognition::default(),
+            execution: crate::skill_execution::SkillExecution::default(),
         }
     }
 
@@ -73,11 +75,23 @@ impl OfflineMobileBia {
             timestamp,
         });
 
-        if let Some(reply) = self.integrated.handle(text) {
-            let focus = self.language.perceive("kiem tra tri thuc", timestamp).pop()?;
+        let execution_reply = self.execution_command(text);
+        if let Some(reply) = execution_reply.or_else(|| self.integrated.handle(text)) {
+            let focus = self
+                .language
+                .perceive("kiem tra tri thuc", timestamp)
+                .pop()?;
             let moment = self.bia.contemplate(focus, device, 0.7);
-            self.dialogue.push(DialogueTurn { speaker: Speaker::Bia, text: reply.clone(), timestamp: timestamp.saturating_add(1) });
-            return Some(MobileReply { text: reply, moment, pending_action: self.queue.front().cloned() });
+            self.dialogue.push(DialogueTurn {
+                speaker: Speaker::Bia,
+                text: reply.clone(),
+                timestamp: timestamp.saturating_add(1),
+            });
+            return Some(MobileReply {
+                text: reply,
+                moment,
+                pending_action: self.queue.front().cloned(),
+            });
         }
 
         let semantic_scene = self
@@ -87,25 +101,35 @@ impl OfflineMobileBia {
             .intelligence
             .answer_scene(&self.bia.world, &semantic_scene);
         let mut evidence_limited = false;
-        if semantic_scene.query.as_ref().is_some_and(|q| q.kind == crate::semantic::QueryKind::Causal) {
+        if semantic_scene
+            .query
+            .as_ref()
+            .is_some_and(|q| q.kind == crate::semantic::QueryKind::Causal)
+        {
             let evidence = crate::evidence_search::CausalEvidenceSearch.search(
-                &self.intelligence, &self.bia.world, &self.knowledge, &semantic_scene, device,
+                &self.intelligence,
+                &self.bia.world,
+                &self.knowledge,
+                &semantic_scene,
+                device,
             );
             semantic_answer = evidence.answer;
             evidence_limited = evidence.budget_limited;
         } else if semantic_scene.query.is_some() && matches!(semantic_answer, OpenAnswer::Unknown) {
             let mut loaded = 0usize;
             for hit in self.retriever.recall(&self.knowledge, text, 3) {
-                let _ = self
-                    .intelligence
-                    .learn(&mut self.bia.world, &hit.record.excerpt, timestamp);
+                let _ =
+                    self.intelligence
+                        .learn(&mut self.bia.world, &hit.record.excerpt, timestamp);
                 loaded += 1;
             }
             if loaded == 0 {
                 for hit in self.vector_retriever.recall(&self.knowledge, text, 3) {
-                    let _ = self
-                        .intelligence
-                        .learn(&mut self.bia.world, &hit.record.excerpt, timestamp);
+                    let _ = self.intelligence.learn(
+                        &mut self.bia.world,
+                        &hit.record.excerpt,
+                        timestamp,
+                    );
                 }
             }
             semantic_answer = self
@@ -119,7 +143,9 @@ impl OfflineMobileBia {
             if self.queue.is_empty() {
                 let plan = decompose_goal(goal, id);
                 for step in plan.steps {
-                    self.queue.push(step);
+                    if let Some(step) = self.execution.identify(step) {
+                        self.queue.push(step);
+                    }
                 }
             }
         }
@@ -138,26 +164,22 @@ impl OfflineMobileBia {
         let moment = self.bia.contemplate(focus.clone(), device, 0.7);
 
         if let Some(lesson) = teaching {
-            self.ingest_content(
-                "user",
-                ProvenanceKind::User,
-                lesson,
-                timestamp,
-                0.95,
-            );
+            self.ingest_content("user", ProvenanceKind::User, lesson, timestamp, 0.95);
         }
 
         let direct = infer_device_action(text, stable_id(text, timestamp));
         if let Some(action) = direct {
-            self.queue.push(action);
+            if let Some(action) = self.execution.identify(action) {
+                self.queue.push(action);
+            }
         } else if is_continue(text) && self.queue.is_empty() {
             if let Some(goal) = self.goals.active() {
-                let plan = decompose_goal(
-                    &goal.description,
-                    stable_id(&goal.description, timestamp),
-                );
+                let plan =
+                    decompose_goal(&goal.description, stable_id(&goal.description, timestamp));
                 for step in plan.steps {
-                    self.queue.push(step);
+                    if let Some(step) = self.execution.identify(step) {
+                        self.queue.push(step);
+                    }
                 }
             }
         }
@@ -165,8 +187,7 @@ impl OfflineMobileBia {
         let pending = self.queue.front().cloned();
 
         let mut reply = if let Some(query) = &semantic_scene.query {
-            let (support, opposition, path_len, evidence_count) =
-                answer_metrics(&semantic_answer);
+            let (support, opposition, path_len, evidence_count) = answer_metrics(&semantic_answer);
             let cycle_input = CognitiveLoopInput {
                 target: query.object.id,
                 support,
@@ -180,13 +201,13 @@ impl OfflineMobileBia {
                 .autonomous_cycle(&semantic_answer, &cycle_input);
             // Rendering must respect the critic's cap, including a Hold verdict.
             match &mut semantic_answer {
-                OpenAnswer::Supported { confidence, .. } | OpenAnswer::Opposed { confidence, .. } => {
+                OpenAnswer::Supported { confidence, .. }
+                | OpenAnswer::Opposed { confidence, .. } => {
                     *confidence = confidence.min(cycle.final_confidence);
                 }
                 _ => {}
             }
-            let adjusted_uncertainty =
-                (1.0 - cycle.final_confidence).clamp(0.0, 1.0);
+            let adjusted_uncertainty = (1.0 - cycle.final_confidence).clamp(0.0, 1.0);
             let mut thought = self
                 .intelligence
                 .generate_thought(&semantic_answer, adjusted_uncertainty)
@@ -204,7 +225,7 @@ impl OfflineMobileBia {
                 }
                 LoopDecision::Hold => {
                     thought.push_str(
-                        " Tôi tạm giữ kết luận thay vì ép chọn khi độ chắc chưa đạt ngưỡng."
+                        " Tôi tạm giữ kết luận thay vì ép chọn khi độ chắc chưa đạt ngưỡng.",
                     );
                 }
                 LoopDecision::Answer => {}
@@ -284,7 +305,8 @@ impl OfflineMobileBia {
         let mut count = 0usize;
         for p in phenomena.into_iter().take(24) {
             let meaning = self.bia.observe(p.clone());
-            self.bia.experience(&p, meaning, confidence.clamp(0.0, 1.0), 0.0);
+            self.bia
+                .experience(&p, meaning, confidence.clamp(0.0, 1.0), 0.0);
             count += 1;
         }
         count
@@ -316,6 +338,92 @@ impl OfflineMobileBia {
         self.tokens.emit_response(input, moment, response)
     }
 
+    fn execution_command(&mut self, text: &str) -> Option<String> {
+        let (head, body) = text.split_once(':').unwrap_or((text, ""));
+        let normalized = crate::semantic::normalize(head);
+        let head = normalized.trim();
+        if head == "huy thuc thi" {
+            self.queue.clear();
+            self.execution.cancel();
+            return Some(
+                "Đã dừng hàng đợi. Thao tác đã xảy ra ngoài thiết bị không được hoàn tác tự động."
+                    .into(),
+            );
+        }
+        if head == "trang thai thuc thi" {
+            return Some(if self.execution.in_flight.is_some() {
+                "Có bước đang thực thi hoặc kết quả chưa xác định sau gián đoạn. Không tự chạy lại; hãy kiểm tra thiết bị rồi Hủy thực thi nếu cần.".into()
+            } else {
+                format!(
+                    "Còn {} bước chờ duyệt; đã giữ {} biên nhận gần nhất.",
+                    self.queue.len(),
+                    self.execution.receipts.len()
+                )
+            });
+        }
+        let steps = if let Some(name) = head.strip_prefix("chay ky nang ") {
+            self.integrated
+                .executable_skill(name)
+                .map(|a| vec![(name.to_string(), a)])
+        } else if head == "chay ke hoach" {
+            self.integrated.executable_plan(body)
+        } else {
+            return None;
+        };
+        if !self.queue.is_empty() || self.execution.in_flight.is_some() {
+            return Some(
+                "Đang có bước chờ duyệt hoặc chưa rõ kết quả; hãy xử lý hàng đợi trước.".into(),
+            );
+        }
+        let Some(steps) = steps else {
+            return Some("Chưa có kế hoạch thực thi đầy đủ: kiểm tra kỹ năng, thao tác đã gắn và phản hồi thất bại.".into());
+        };
+        let Some(actions) = self.execution.prepare(steps) else {
+            return Some("Chưa thể mở lượt thực thi mới.".into());
+        };
+        let count = actions.len();
+        for action in actions {
+            self.queue.push(action);
+        }
+        Some(format!("Đã chuẩn bị {count} bước thực thi thật. Hãy duyệt nội dung từng bước; thành công mở ứng dụng chỉ xác nhận hệ điều hành đã tiếp nhận, không chứng minh mục tiêu trong ứng dụng đã hoàn thành."))
+    }
+
+    pub fn claim_device_action(&mut self, id: u64) -> bool {
+        self.execution.claim(id, self.queue.front().map(|a| a.id))
+    }
+    pub fn complete_device_action(&mut self, id: u64, success: bool, timestamp: u64) -> bool {
+        if !self
+            .execution
+            .complete(id, success, self.queue.front().map(|a| a.id))
+        {
+            return false;
+        }
+        let skill = self
+            .execution
+            .skills
+            .iter()
+            .find(|s| s.0 == id)
+            .map(|s| s.1.clone());
+        self.execution.skills.retain(|s| s.0 != id);
+        self.resolve_action_receipt(success, timestamp, false);
+        if !success {
+            if let Some(name) = skill {
+                self.integrated.record_execution_failure(&name);
+            }
+            self.queue.clear();
+            self.execution.skills.clear();
+        }
+        true
+    }
+    pub fn cancel_device_action(&mut self, id: u64) -> bool {
+        if self.execution.in_flight.is_some() || self.queue.front().map(|a| a.id) != Some(id) {
+            return false;
+        }
+        self.queue.clear();
+        self.execution.cancel();
+        true
+    }
+
     pub fn pending_action(&self) -> Option<&DeviceAction> {
         self.queue.front()
     }
@@ -326,6 +434,10 @@ impl OfflineMobileBia {
     }
 
     pub fn resolve_pending_action(&mut self, success: bool, timestamp: u64) {
+        self.resolve_action_receipt(success, timestamp, true);
+    }
+
+    fn resolve_action_receipt(&mut self, success: bool, timestamp: u64, advance_goal: bool) {
         let Some(action) = self.queue.pop_front() else {
             return;
         };
@@ -349,6 +461,9 @@ impl OfflineMobileBia {
             if success { 0.0 } else { 0.85 },
         );
 
+        if !advance_goal {
+            return;
+        }
         if let Some(goal) = self.goals.active() {
             if success {
                 let next = (goal.progress + 0.25).min(1.0);
@@ -372,7 +487,7 @@ impl OfflineMobileBia {
             knowledge: self.knowledge.records().cloned().collect(),
         });
         let cognition = self.integrated.export();
-        if cognition.is_empty() { base } else { format!("{base}\n{cognition}") }
+        format!("{base}\n{cognition}\n{}", self.execution.export())
     }
 
     pub fn continuity_import(&mut self, text: &str) -> bool {
@@ -380,8 +495,16 @@ impl OfflineMobileBia {
             return false;
         };
         let mut restored_cognition = crate::integrated_cognition::IntegratedCognition::default();
-        if !restored_cognition.restore(text) { return false; }
+        if !restored_cognition.restore(text) {
+            return false;
+        }
+        let Some(restored_execution) =
+            crate::skill_execution::SkillExecution::restore(text, &state.queued_actions)
+        else {
+            return false;
+        };
         self.integrated = restored_cognition;
+        self.execution = restored_execution;
         if let Some(goal) = state.active_goal {
             self.goals.restore_active(goal);
         }
@@ -406,7 +529,13 @@ impl OfflineMobileBia {
 
 fn extract_teaching(input: &str) -> Option<&str> {
     let lower = input.to_lowercase();
-    for prefix in ["nhớ rằng ", "ghi nhớ rằng ", "ghi nhớ ", "nho rang ", "ghi nho "] {
+    for prefix in [
+        "nhớ rằng ",
+        "ghi nhớ rằng ",
+        "ghi nhớ ",
+        "nho rang ",
+        "ghi nho ",
+    ] {
         if lower.starts_with(prefix) {
             let n = prefix.chars().count();
             return input
@@ -474,30 +603,29 @@ fn action_features(action: &DeviceAction) -> Vec<f32> {
     out
 }
 
-
-
-
 fn answer_metrics(answer: &OpenAnswer) -> (f32, f32, usize, usize) {
     match answer {
-        OpenAnswer::Supported { confidence, path } => {
-            (*confidence, 0.0, path.len().saturating_sub(1), path.len().saturating_sub(1))
-        }
-        OpenAnswer::Opposed { confidence, path } => {
-            (0.0, *confidence, path.len().saturating_sub(1), path.len().saturating_sub(1))
-        }
-        OpenAnswer::Contradicted { support, opposition } => {
-            (*support, *opposition, 2, 2)
-        }
+        OpenAnswer::Supported { confidence, path } => (
+            *confidence,
+            0.0,
+            path.len().saturating_sub(1),
+            path.len().saturating_sub(1),
+        ),
+        OpenAnswer::Opposed { confidence, path } => (
+            0.0,
+            *confidence,
+            path.len().saturating_sub(1),
+            path.len().saturating_sub(1),
+        ),
+        OpenAnswer::Contradicted {
+            support,
+            opposition,
+        } => (*support, *opposition, 2, 2),
         OpenAnswer::Counterfactual {
             factual_support,
             counterfactual_support,
             ..
-        } => (
-            *factual_support,
-            *counterfactual_support,
-            2,
-            2,
-        ),
+        } => (*factual_support, *counterfactual_support, 2, 2),
         OpenAnswer::Unknown => (0.0, 0.0, 0, 0),
     }
 }

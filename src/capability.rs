@@ -34,8 +34,8 @@ pub fn infer_device_action(input: &str, id: u64) -> Option<DeviceAction> {
         });
     }
 
-    if let Some(rest) = strip_prefix_ci(trimmed, "sao chép ")
-        .or_else(|| strip_prefix_ci(trimmed, "copy "))
+    if let Some(rest) =
+        strip_prefix_ci(trimmed, "sao chép ").or_else(|| strip_prefix_ci(trimmed, "copy "))
     {
         if !rest.trim().is_empty() {
             return Some(DeviceAction {
@@ -137,15 +137,12 @@ fn strip_prefix_ci<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
     let n_value = normalize(value);
     let n_prefix = normalize(prefix);
     if n_value.starts_with(&n_prefix) {
-        value.get(prefix.chars().count()..)
-            .or_else(|| {
-                let split = value
-                    .char_indices()
-                    .nth(n_prefix.chars().count())
-                    .map(|(i, _)| i)
-                    .unwrap_or(value.len());
-                value.get(split..)
-            })
+        let split = value
+            .char_indices()
+            .nth(prefix.chars().count())
+            .map(|(i, _)| i)
+            .unwrap_or(value.len());
+        value.get(split..)
     } else {
         None
     }
@@ -161,22 +158,31 @@ fn normalize(s: &str) -> String {
     s.to_lowercase()
         .chars()
         .map(|c| match c {
-            'à'|'á'|'ạ'|'ả'|'ã'|'â'|'ầ'|'ấ'|'ậ'|'ẩ'|'ẫ'|'ă'|'ằ'|'ắ'|'ặ'|'ẳ'|'ẵ' => 'a',
-            'è'|'é'|'ẹ'|'ẻ'|'ẽ'|'ê'|'ề'|'ế'|'ệ'|'ể'|'ễ' => 'e',
-            'ì'|'í'|'ị'|'ỉ'|'ĩ' => 'i',
-            'ò'|'ó'|'ọ'|'ỏ'|'õ'|'ô'|'ồ'|'ố'|'ộ'|'ổ'|'ỗ'|'ơ'|'ờ'|'ớ'|'ợ'|'ở'|'ỡ' => 'o',
-            'ù'|'ú'|'ụ'|'ủ'|'ũ'|'ư'|'ừ'|'ứ'|'ự'|'ử'|'ữ' => 'u',
-            'ỳ'|'ý'|'ỵ'|'ỷ'|'ỹ' => 'y',
+            'à' | 'á' | 'ạ' | 'ả' | 'ã' | 'â' | 'ầ' | 'ấ' | 'ậ' | 'ẩ' | 'ẫ' | 'ă' | 'ằ' | 'ắ'
+            | 'ặ' | 'ẳ' | 'ẵ' => 'a',
+            'è' | 'é' | 'ẹ' | 'ẻ' | 'ẽ' | 'ê' | 'ề' | 'ế' | 'ệ' | 'ể' | 'ễ' => {
+                'e'
+            }
+            'ì' | 'í' | 'ị' | 'ỉ' | 'ĩ' => 'i',
+            'ò' | 'ó' | 'ọ' | 'ỏ' | 'õ' | 'ô' | 'ồ' | 'ố' | 'ộ' | 'ổ' | 'ỗ' | 'ơ' | 'ờ' | 'ớ'
+            | 'ợ' | 'ở' | 'ỡ' => 'o',
+            'ù' | 'ú' | 'ụ' | 'ủ' | 'ũ' | 'ư' | 'ừ' | 'ứ' | 'ự' | 'ử' | 'ữ' => {
+                'u'
+            }
+            'ỳ' | 'ý' | 'ỵ' | 'ỷ' | 'ỹ' => 'y',
             'đ' => 'd',
             c => c,
         })
         .collect()
 }
 
-
 pub fn action_for_goal(description: &str, id: u64) -> Option<DeviceAction> {
     let n = normalize(description);
-    if n.contains("tim ") || n.starts_with("tim") || n.contains("tra cuu") || n.contains("nghien cuu") {
+    if n.contains("tim ")
+        || n.starts_with("tim")
+        || n.contains("tra cuu")
+        || n.contains("nghien cuu")
+    {
         return Some(DeviceAction {
             id,
             kind: DeviceActionKind::SearchWeb,
