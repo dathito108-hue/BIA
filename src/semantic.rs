@@ -86,6 +86,12 @@ impl VietnameseSemanticParser {
 }
 
 fn parse_clause(s: &str) -> Option<SemanticClause> {
+    // Absence of a cause is not an inhibiting mechanism. Keep unsupported
+    // negation out of the positive graph rather than inventing a causal edge.
+    if unsupported_assertion(s) { return None; }
+    if let Some((effect, cause)) = split_once_nonempty(s, " la do ") {
+        return clause(cause, effect, RelationKind::Causes, 0.90);
+    }
     if let Some((a, b)) = split_once_nonempty(s, " neu ") {
         if let Some((condition, consequence)) = split_once_nonempty(&format!("{a} neu {b}"), " thi ") {
             return clause(condition, consequence, RelationKind::Enables, 0.88);
@@ -104,13 +110,13 @@ fn parse_clause(s: &str) -> Option<SemanticClause> {
         }
     }
 
-    for marker in [" gay ra ", " dan den ", " lam cho ", " khien "] {
+    for marker in [" gay ra ", " dan den ", " dan toi ", " keo theo ", " la nguyen nhan cua ", " lam cho ", " khien "] {
         if let Some((a, b)) = split_once_nonempty(s, marker) {
             return clause(a, b, RelationKind::Causes, 0.93);
         }
     }
 
-    for marker in [" ngan ", " can tro ", " ngan can ", " vo hieu hoa "] {
+    for marker in [" ngan can ", " ngan ", " can tro ", " vo hieu hoa "] {
         if let Some((a, b)) = split_once_nonempty(s, marker) {
             return clause(a, b, RelationKind::Inhibits, 0.92);
         }
@@ -134,7 +140,7 @@ fn parse_clause(s: &str) -> Option<SemanticClause> {
 fn parse_causal_query(s: &str) -> Option<SemanticQuery> {
     let question = s.trim_end_matches('?').trim();
 
-    for marker in [" co gay ra ", " co dan den ", " co lam cho ", " co khien "] {
+    for marker in [" co gay ra ", " co dan den ", " co dan toi ", " co keo theo ", " co la nguyen nhan cua ", " co lam cho ", " co khien "] {
         if let Some((a, right)) = split_once_nonempty(question, marker) {
             let b = right
                 .strip_suffix(" khong")
@@ -282,4 +288,13 @@ fn phrase_features(s: &str) -> Vec<f32> {
         *x /= scale;
     }
     v
+}
+
+/// These expressions require truth/possibility operators not represented by a
+/// positive causal edge. Callers must not send them through latent fallback.
+pub fn unsupported_assertion(text: &str) -> bool {
+    let text = normalize(text);
+    ["khong gay", "khong dan", "khong keo", "khong lam", "khong khien",
+     "khong phai", "chua chac", "co le", "gia thuyet:", "khong ngan", "khong can tro"]
+        .iter().any(|marker| text.contains(marker))
 }

@@ -39,6 +39,7 @@ pub struct OfflineMobileBia {
     pub retriever: SemanticRetriever,
     pub vector_retriever: VectorSemanticRetriever,
     queue: ActionQueue,
+    pub integrated: crate::integrated_cognition::IntegratedCognition,
 }
 
 impl OfflineMobileBia {
@@ -56,6 +57,7 @@ impl OfflineMobileBia {
             retriever: SemanticRetriever,
             vector_retriever: VectorSemanticRetriever::default(),
             queue: ActionQueue::new(12),
+            integrated: crate::integrated_cognition::IntegratedCognition::default(),
         }
     }
 
@@ -70,6 +72,13 @@ impl OfflineMobileBia {
             text: text.to_string(),
             timestamp,
         });
+
+        if let Some(reply) = self.integrated.handle(text) {
+            let focus = self.language.perceive("kiem tra tri thuc", timestamp).pop()?;
+            let moment = self.bia.contemplate(focus, device, 0.7);
+            self.dialogue.push(DialogueTurn { speaker: Speaker::Bia, text: reply.clone(), timestamp: timestamp.saturating_add(1) });
+            return Some(MobileReply { text: reply, moment, pending_action: self.queue.front().cloned() });
+        }
 
         let semantic_scene = self
             .intelligence
@@ -357,17 +366,22 @@ impl OfflineMobileBia {
     }
 
     pub fn continuity_export(&self) -> String {
-        encode_continuity(&ContinuityState {
+        let base = encode_continuity(&ContinuityState {
             active_goal: self.goals.active().cloned(),
             queued_actions: self.queue.items().cloned().collect(),
             knowledge: self.knowledge.records().cloned().collect(),
-        })
+        });
+        let cognition = self.integrated.export();
+        if cognition.is_empty() { base } else { format!("{base}\n{cognition}") }
     }
 
     pub fn continuity_import(&mut self, text: &str) -> bool {
         let Some(state) = decode_continuity(text) else {
             return false;
         };
+        let mut restored_cognition = crate::integrated_cognition::IntegratedCognition::default();
+        if !restored_cognition.restore(text) { return false; }
+        self.integrated = restored_cognition;
         if let Some(goal) = state.active_goal {
             self.goals.restore_active(goal);
         }

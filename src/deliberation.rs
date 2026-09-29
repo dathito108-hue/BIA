@@ -46,10 +46,19 @@ impl DeliberativePlanner {
                     continue;
                 }
 
-                for transition in model
-                    .applicable(&candidate.final_state)
-                    .take(MAX_BRANCH)
-                {
+                // Rank applicable transitions before the branch cap; declaration
+                // order must not hide a useful ninth skill behind eight decoys.
+                let mut applicable: Vec<_> = model.applicable(&candidate.final_state)
+                    .filter(|t| !t.adds.iter().any(|f| goal.avoid.contains(f)))
+                    .collect();
+                applicable.sort_by(|a, b| {
+                    let relevance = |t: &crate::world_model::TransitionModel| {
+                        t.adds.iter().filter(|f| goal.desired.contains(f)).count() as f32 * 2.0
+                            + t.utility - t.cost + t.confidence
+                    };
+                    relevance(b).total_cmp(&relevance(a)).then(a.action.cmp(&b.action))
+                });
+                for transition in applicable.into_iter().take(MAX_BRANCH) {
                     if candidate.actions.contains(&transition.action) {
                         continue;
                     }
@@ -68,8 +77,8 @@ impl DeliberativePlanner {
                             score,
                             reached_goal,
                         };
-                        if item.score > best.score
-                            || (item.reached_goal && !best.reached_goal)
+                        if (item.reached_goal && !best.reached_goal)
+                            || (item.reached_goal == best.reached_goal && item.score > best.score)
                         {
                             best = item.clone();
                         }
