@@ -172,6 +172,7 @@ impl OfflineMobileBia {
             timestamp,
             confidence: confidence.clamp(0.0, 1.0),
         });
+        let _ = self.decoder.learn_text(&excerpt);
 
         let phenomena = self.language.perceive(&excerpt, timestamp);
         let mut count = 0usize;
@@ -194,6 +195,10 @@ impl OfflineMobileBia {
 
     pub fn duyen_generate(&mut self, input: &str, max_tokens: usize) -> String {
         self.decoder.generate(input, max_tokens).tokens.join(" ")
+    }
+
+    pub fn learned_vocab_len(&self) -> usize {
+        self.decoder.learned_vocab_len()
     }
 
     pub fn response_tokens(
