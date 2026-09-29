@@ -20,7 +20,7 @@ public final class GameLoopTest extends InstrumentationTestCase {
         assertTrue("native MOBA decisions dispatched",moba.completed>=1);
         record("MOBA",moba,"game-proof.png");
         // Leave the arena without rotating, then exercise the actual Stop button.
-        getInstrumentation().getTargetContext().startActivity(new Intent(getInstrumentation().getTargetContext(),GameSetupActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        getInstrumentation().getTargetContext().startActivity(new Intent(getInstrumentation().getTargetContext(),GameSetupActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP));
         waitFor(()->!moba.armed,5000,"pause outside arena");Thread.sleep(200);int stopped=moba.completed;Thread.sleep(600);
         assertEquals("no gestures after leaving target",stopped,moba.completed);
         click("DỪNG",5000);waitFor(()->GameCaptureService.instance==null,5000,"explicit session stop and buffer cleanup");
@@ -31,12 +31,12 @@ public final class GameLoopTest extends InstrumentationTestCase {
         assertTrue("FPS aimed before firing",fps.completed>=3);
         record("FPS",fps,"game-fps-proof.png");
         // Portrait MainActivity changes capture geometry: regression for buffer-close crash.
-        getInstrumentation().getTargetContext().startActivity(new Intent(getInstrumentation().getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        getInstrumentation().getTargetContext().startActivity(new Intent(getInstrumentation().getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP));
         waitFor(()->GameCaptureService.instance==null,7000,"rotation closes projection without crashing");
         assertFalse("rotation revokes the game scope",fps.armed);
     }
     GameAccessibilityService startSession(boolean moba)throws Exception {
-        Intent setup=new Intent(getInstrumentation().getTargetContext(),GameSetupActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        Intent setup=new Intent(getInstrumentation().getTargetContext(),GameSetupActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP);
         GameSetupActivity activity=(GameSetupActivity)getInstrumentation().startActivitySync(setup);
         if(GameAccessibilityService.instance==null){
             // am instrument force-stops the target process; bind after its restart.
