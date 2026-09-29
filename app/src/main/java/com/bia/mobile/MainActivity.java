@@ -33,6 +33,8 @@ import android.widget.Toast;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -40,6 +42,7 @@ import java.util.Locale;
 
 public class MainActivity extends Activity implements TextToSpeech.OnInitListener {
     private static final int REQ_SPEECH = 97;
+    private static final int REQ_DOCUMENT = 98;
 
     static {
         System.loadLibrary("bia_core");
@@ -62,6 +65,13 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     public static native void nativeResolveAction(boolean success, long timestamp);
     public static native String nativeExportContinuity();
     public static native boolean nativeImportContinuity(String state);
+    public static native int nativeIngestContent(
+            String source,
+            int kind,
+            String content,
+            long timestamp,
+            float confidence
+    );
 
     private static final int BG = Color.rgb(12, 18, 16);
     private static final int SURFACE = Color.rgb(24, 34, 30);
@@ -132,7 +142,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         }
 
         addBubble(
-                "Voice đã sẵn sàng qua nút Mic. BIA có thể giữ mục tiêu, tiếp tục hàng đợi hành động và cảm nhận pin/nhiệt thiết bị khi Quán.",
+                "Mic, Tệp và Android Share đã sẵn sàng. BIA có thể Quán văn bản/tài liệu có provenance, lập kế hoạch nhiều bước và tiếp tục công việc qua restart.",
                 false
         );
 
@@ -144,6 +154,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             addBubble("Có một hành động đang chờ từ phiên trước.", false);
             handlePendingAction();
         }
+        handleIncomingShare(getIntent());
     }
 
     @Override
@@ -187,7 +198,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         labels.setPadding(dp(14), 0, 0, 0);
         labels.addView(text("BIA", 24, TEXT, Typeface.BOLD));
         labels.addView(text(
-                "Trí tuệ Duyên khởi • Voice + Continuity V5",
+                "Trí tuệ Duyên khởi • Perception + Planner + Provenance V8",
                 13,
                 MUTED,
                 Typeface.NORMAL
@@ -247,6 +258,12 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         Button mic = compactButton("Mic");
         mic.setOnClickListener(v -> startVoiceRecognition());
         composer.addView(mic, new LinearLayout.LayoutParams(dp(58), dp(52)));
+
+        Button file = compactButton("Tệp");
+        file.setOnClickListener(v -> openDocument());
+        LinearLayout.LayoutParams fileParams = new LinearLayout.LayoutParams(dp(58), dp(52));
+        fileParams.setMargins(dp(6), 0, 0, 0);
+        composer.addView(file, fileParams);
 
         input = new EditText(this);
         input.setTextColor(TEXT);
@@ -316,6 +333,68 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         }
     }
 
+    private void openDocument() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("text/*");
+        startActivityForResult(intent, REQ_DOCUMENT);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIncomingShare(intent);
+    }
+
+    private void handleIncomingShare(Intent intent) {
+        if (intent == null || !Intent.ACTION_SEND.equals(intent.getAction())) return;
+        String shared = intent.getStringExtra(Intent.EXTRA_TEXT);
+        if (shared == null || shared.trim().isEmpty()) return;
+        int count = nativeIngestContent(
+                "android-share",
+                1,
+                shared,
+                SystemClock.elapsedRealtime(),
+                0.90f
+        );
+        addBubble("Đã tiếp nhận nội dung được chia sẻ: " + count + " Cảnh có provenance.", false);
+        persistAll();
+        refreshStatus();
+    }
+
+    private void ingestDocument(Uri uri) {
+        if (uri == null) return;
+        try (InputStream in = getContentResolver().openInputStream(uri);
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            if (in == null) return;
+            byte[] buffer = new byte[4096];
+            int total = 0;
+            int n;
+            while ((n = in.read(buffer)) > 0 && total < 256 * 1024) {
+                int take = Math.min(n, 256 * 1024 - total);
+                out.write(buffer, 0, take);
+                total += take;
+            }
+            String content = new String(out.toByteArray(), StandardCharsets.UTF_8);
+            int count = nativeIngestContent(
+                    uri.toString(),
+                    2,
+                    content,
+                    SystemClock.elapsedRealtime(),
+                    0.85f
+            );
+            addBubble(
+                    "Đã Quán tài liệu cục bộ và ghi " + count + " Cảnh kèm nguồn gốc.",
+                    false
+            );
+            persistAll();
+            refreshStatus();
+        } catch (Exception e) {
+            Toast.makeText(this, "Không đọc được tài liệu này.", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -327,6 +406,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                 voiceTurn = true;
                 submit();
             }
+        } else if (requestCode == REQ_DOCUMENT && resultCode == RESULT_OK && data != null) {
+            ingestDocument(data.getData());
         }
     }
 
