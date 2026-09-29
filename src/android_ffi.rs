@@ -433,6 +433,36 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeDeliberationV37(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeMaxIntelligenceV45(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let report = crate::run_v45_max_intelligence_evaluation();
+    java_string(
+        &mut env,
+        format!(
+            "V45 max intelligence: pass={}, cases={}, meta={}/{}, calibration={}/{}, evidence={}/{}, recursive={}/{}, routing={}/{}, transfer={}/{}, accuracy={:.3}, elapsed_us={}",
+            report.passed(),
+            report.cases,
+            report.metacognition_passes,
+            report.cases,
+            report.calibration_passes,
+            report.cases,
+            report.evidence_passes,
+            report.cases,
+            report.recursive_passes,
+            report.cases,
+            report.compute_routing_passes,
+            report.cases,
+            report.transfer_passes,
+            report.cases,
+            report.accuracy(),
+            report.elapsed.as_micros()
+        ),
+    )
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
