@@ -269,3 +269,19 @@ This block lets BIA create and govern higher-level knowledge from existing exper
 - **Android proof:** `/autonomy` runs the V31–V36 knowledge-formation suite natively.
 
 Hard bounds remain on abstract concepts, hypothesis candidates, meta-rules and promotion passes. The proof demonstrates autonomous structured knowledge formation inside the defined causal representation; it does not establish unrestricted autonomous scientific discovery or frontier-model intelligence.
+
+
+## Inference V37–V44 — World Model & Deliberative Intelligence
+
+This block adds bounded internal simulation before action.
+
+- **World Model:** stores up to 64 transition models with preconditions, add/remove effects, utility, cost and confidence.
+- **Future-State Simulation:** an action can be simulated against a compact state of at most 64 active facts without mutating the durable WorldGraph.
+- **Goal-Directed Deliberation:** bounded beam search evaluates candidate action sequences against desired and avoided outcomes.
+- **Safety-by-Outcome:** plans that technically reach a goal but also produce an explicitly avoided state are penalized.
+- **Bounded Search:** depth is capped at 4, branching at 8 and beam width at 12.
+- **Prediction Audit:** observed outcomes are compared with predicted states.
+- **Adaptive Replanning:** when prediction accuracy falls below threshold or too many unexpected facts appear, planning restarts from the observed state.
+- **Android proof:** `/world` runs the V37–V44 deliberation suite natively.
+
+The world model is a compact structured simulator over explicit facts and transitions. It improves prospective reasoning and planning, but is not yet a learned high-dimensional simulator of unrestricted real-world environments.

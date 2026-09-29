@@ -1203,3 +1203,165 @@ pub fn run_v31_autonomous_knowledge_evaluation() -> V31AutonomousKnowledgeReport
         elapsed: start.elapsed(),
     }
 }
+
+
+#[derive(Clone, Debug)]
+pub struct V37DeliberationReport {
+    pub cases: usize,
+    pub prediction_passes: usize,
+    pub planning_passes: usize,
+    pub avoidance_passes: usize,
+    pub replan_passes: usize,
+    pub bounded_passes: usize,
+    pub elapsed: Duration,
+}
+
+impl V37DeliberationReport {
+    pub fn passed(&self) -> bool {
+        self.prediction_passes == self.cases
+            && self.planning_passes == self.cases
+            && self.avoidance_passes == self.cases
+            && self.replan_passes == self.cases
+            && self.bounded_passes == self.cases
+    }
+
+    pub fn accuracy(&self) -> f32 {
+        let denom = (self.cases * 5).max(1) as f32;
+        (self.prediction_passes
+            + self.planning_passes
+            + self.avoidance_passes
+            + self.replan_passes
+            + self.bounded_passes) as f32
+            / denom
+    }
+}
+
+pub fn run_v37_deliberation_evaluation() -> V37DeliberationReport {
+    use crate::deliberation::{DeliberativePlanner, GoalSpec};
+    use crate::outcome_learning::OutcomeLearner;
+    use crate::world_model::{SimState, TransitionModel, WorldModel};
+
+    let start_time = Instant::now();
+    let cases = 128usize;
+    let mut prediction = 0usize;
+    let mut planning = 0usize;
+    let mut avoidance = 0usize;
+    let mut replan = 0usize;
+    let mut bounded = 0usize;
+
+    for i in 0..cases {
+        let base = i as u64 * 100;
+        let ready = base + 1;
+        let prepared = base + 2;
+        let done = base + 3;
+        let danger = base + 4;
+        let fallback = base + 5;
+
+        let a_prepare = base + 10;
+        let a_finish = base + 11;
+        let a_risky = base + 12;
+        let a_recover = base + 13;
+
+        let mut model = WorldModel::default();
+        model.add_transition(TransitionModel {
+            action: a_prepare,
+            requires: vec![ready],
+            adds: vec![prepared],
+            removes: vec![],
+            utility: 0.25,
+            cost: 0.05,
+            confidence: 0.98,
+        });
+        model.add_transition(TransitionModel {
+            action: a_finish,
+            requires: vec![prepared],
+            adds: vec![done],
+            removes: vec![],
+            utility: 1.0,
+            cost: 0.10,
+            confidence: 0.97,
+        });
+        model.add_transition(TransitionModel {
+            action: a_risky,
+            requires: vec![ready],
+            adds: vec![done, danger],
+            removes: vec![],
+            utility: 1.2,
+            cost: 0.01,
+            confidence: 0.95,
+        });
+        model.add_transition(TransitionModel {
+            action: a_recover,
+            requires: vec![fallback],
+            adds: vec![prepared],
+            removes: vec![fallback],
+            utility: 0.15,
+            cost: 0.05,
+            confidence: 0.95,
+        });
+
+        let initial = SimState::new([ready]);
+        if model
+            .simulate(&initial, a_prepare)
+            .is_some_and(|s| s.contains(prepared) && s.contains(ready))
+        {
+            prediction += 1;
+        }
+
+        let goal = GoalSpec {
+            desired: vec![done],
+            avoid: vec![danger],
+        };
+        let planner = DeliberativePlanner;
+        let plan = planner.plan(&model, &initial, &goal);
+        if plan
+            .as_ref()
+            .is_some_and(|p| p.reached_goal && p.actions == vec![a_prepare, a_finish])
+        {
+            planning += 1;
+        }
+        if plan
+            .as_ref()
+            .is_some_and(|p| !p.final_state.contains(danger))
+        {
+            avoidance += 1;
+        }
+
+        if let Some(planned) = plan {
+            let predicted_after_first = model
+                .simulate(&initial, planned.actions[0])
+                .expect("prediction");
+            let observed = SimState::new([fallback]);
+            let learner = OutcomeLearner;
+            if learner.audit(&predicted_after_first, &observed).replan_required
+                && learner
+                    .replan_if_needed(&model, &goal, &predicted_after_first, &observed)
+                    .is_some_and(|p| {
+                        p.actions.first() == Some(&a_recover)
+                            && p.actions.contains(&a_finish)
+                            && p.reached_goal
+                    })
+            {
+                replan += 1;
+            }
+        }
+
+        if model.len() <= 64
+            && planner
+                .plan(&model, &initial, &goal)
+                .is_some_and(|p| p.actions.len() <= 4)
+        {
+            bounded += 1;
+        }
+    }
+
+    V37DeliberationReport {
+        cases,
+        prediction_passes: prediction,
+        planning_passes: planning,
+        avoidance_passes: avoidance,
+        replan_passes: replan,
+        bounded_passes: bounded,
+        elapsed: start_time.elapsed(),
+    }
+}

@@ -15,6 +15,7 @@ pub mod hierarchy;
 pub mod competition;
 pub mod core;
 pub mod dialogue;
+pub mod deliberation;
 pub mod discovery;
 pub mod duyen_token;
 pub mod episodic;
@@ -36,6 +37,7 @@ pub mod memory;
 pub mod mobile;
 pub mod open_intelligence;
 pub mod open_reasoning;
+pub mod outcome_learning;
 pub mod persistence;
 pub mod reasoning;
 pub mod rules;
@@ -45,6 +47,7 @@ pub mod runtime;
 pub mod token_stream;
 pub mod types;
 pub mod world;
+pub mod world_model;
 
 pub use abstraction::{ConceptAbstraction, ConceptGroup};
 pub use autonomous_hypothesis::AutonomousHypothesisGenerator;
@@ -58,10 +61,11 @@ pub use continuity::{decode_continuity, encode_continuity, ContinuityState};
 pub use competition::{CandidateHypothesis, CompetitionResult, HypothesisCompetition};
 pub use core::{BiaDca, BiaDcaConfig};
 pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
+pub use deliberation::{DeliberativePlanner, GoalSpec, PlanCandidate};
 pub use discovery::{ContextDiscovery, DiscoveredSimilarity};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
 pub use episodic::{Episode, EpisodeClause, EpisodicMemory};
-pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, run_v25_emergent_intelligence_evaluation, run_v31_autonomous_knowledge_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport, V25EmergentIntelligenceReport, V31AutonomousKnowledgeReport};
+pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, run_v25_emergent_intelligence_evaluation, run_v31_autonomous_knowledge_evaluation, run_v37_deliberation_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport, V25EmergentIntelligenceReport, V31AutonomousKnowledgeReport, V37DeliberationReport};
 pub use four_matrix::{
     adaptive_realm_weights, classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
     FourMatrixOutput, PerspectiveProjection, RealmBand, AGGREGATES,
@@ -83,6 +87,7 @@ pub use memory::{Seed, SeedMemory};
 pub use mobile::{MobileReply, OfflineMobileBia};
 pub use open_intelligence::OpenIntelligence;
 pub use open_reasoning::{OpenAnswer, SemanticReasoner};
+pub use outcome_learning::{OutcomeLearner, PredictionAudit};
 pub use persistence::{decode, encode, read_file, write_atomic, DharmaSnapshot, PersistenceError};
 pub use reasoning::{CausalPath, CausalReasoner, CounterfactualVerdict, ReasoningVerdict};
 pub use rules::{RuleSynthesizer, SynthesizedRule};
@@ -92,6 +97,7 @@ pub use runtime::{CapacityTier, RuntimeProfile, RuntimeTarget};
 pub use token_stream::{InstantToken, InstantTokenEmitter};
 pub use types::*;
 pub use world::WorldGraph;
+pub use world_model::{SimState, TransitionModel, WorldModel};
 
 #[cfg(test)]
 mod tests {
@@ -1215,6 +1221,119 @@ mod tests {
     #[test]
     fn v31_autonomous_knowledge_suite_passes() {
         let report = run_v31_autonomous_knowledge_evaluation();
+        assert!(report.passed(), "report={report:?}");
+        assert_eq!(report.accuracy(), 1.0);
+    }
+
+    #[test]
+    fn world_model_predicts_transition_effects() {
+        let mut model = WorldModel::default();
+        model.add_transition(TransitionModel {
+            action: 10,
+            requires: vec![1],
+            adds: vec![2],
+            removes: vec![],
+            utility: 0.5,
+            cost: 0.1,
+            confidence: 0.9,
+        });
+        let next = model.simulate(&SimState::new([1]), 10).expect("next");
+        assert!(next.contains(1));
+        assert!(next.contains(2));
+        assert!(next.value > 0.0);
+    }
+
+    #[test]
+    fn deliberation_prefers_safe_goal_reaching_plan() {
+        let mut model = WorldModel::default();
+        model.add_transition(TransitionModel {
+            action: 10,
+            requires: vec![1],
+            adds: vec![2],
+            removes: vec![],
+            utility: 0.2,
+            cost: 0.05,
+            confidence: 1.0,
+        });
+        model.add_transition(TransitionModel {
+            action: 11,
+            requires: vec![2],
+            adds: vec![3],
+            removes: vec![],
+            utility: 1.0,
+            cost: 0.1,
+            confidence: 1.0,
+        });
+        model.add_transition(TransitionModel {
+            action: 12,
+            requires: vec![1],
+            adds: vec![3, 4],
+            removes: vec![],
+            utility: 1.2,
+            cost: 0.0,
+            confidence: 1.0,
+        });
+        let plan = DeliberativePlanner
+            .plan(
+                &model,
+                &SimState::new([1]),
+                &GoalSpec {
+                    desired: vec![3],
+                    avoid: vec![4],
+                },
+            )
+            .expect("plan");
+        assert_eq!(plan.actions, vec![10, 11]);
+        assert!(!plan.final_state.contains(4));
+    }
+
+    #[test]
+    fn outcome_mismatch_triggers_replan() {
+        let mut model = WorldModel::default();
+        model.add_transition(TransitionModel {
+            action: 10,
+            requires: vec![1],
+            adds: vec![2],
+            removes: vec![],
+            utility: 0.2,
+            cost: 0.0,
+            confidence: 1.0,
+        });
+        model.add_transition(TransitionModel {
+            action: 11,
+            requires: vec![2],
+            adds: vec![3],
+            removes: vec![],
+            utility: 1.0,
+            cost: 0.0,
+            confidence: 1.0,
+        });
+        model.add_transition(TransitionModel {
+            action: 12,
+            requires: vec![5],
+            adds: vec![2],
+            removes: vec![5],
+            utility: 0.1,
+            cost: 0.0,
+            confidence: 1.0,
+        });
+        let predicted = model.simulate(&SimState::new([1]), 10).expect("prediction");
+        let observed = SimState::new([5]);
+        let goal = GoalSpec {
+            desired: vec![3],
+            avoid: vec![],
+        };
+        let learner = OutcomeLearner;
+        assert!(learner.audit(&predicted, &observed).replan_required);
+        let replanned = learner
+            .replan_if_needed(&model, &goal, &predicted, &observed)
+            .expect("replan");
+        assert_eq!(replanned.actions, vec![12, 11]);
+    }
+
+    #[test]
+    fn v37_deliberation_suite_passes() {
+        let report = run_v37_deliberation_evaluation();
         assert!(report.passed(), "report={report:?}");
         assert_eq!(report.accuracy(), 1.0);
     }
