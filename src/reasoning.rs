@@ -18,6 +18,15 @@ pub struct ReasoningVerdict {
     pub best_path: Option<CausalPath>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct CounterfactualVerdict {
+    pub factual: ReasoningVerdict,
+    pub counterfactual: ReasoningVerdict,
+    pub removed_node: u64,
+    pub support_delta: f32,
+    pub opposition_delta: f32,
+}
+
 #[derive(Clone, Debug)]
 pub struct CausalReasoner {
     max_depth: usize,
@@ -42,10 +51,49 @@ impl CausalReasoner {
     }
 
     pub fn infer(&self, world: &WorldGraph, target: u64) -> ReasoningVerdict {
+        self.infer_filtered(world, target, None)
+    }
+
+    pub fn infer_without_node(
+        &self,
+        world: &WorldGraph,
+        target: u64,
+        removed_node: u64,
+    ) -> ReasoningVerdict {
+        self.infer_filtered(world, target, Some(removed_node))
+    }
+
+    pub fn counterfactual_without(
+        &self,
+        world: &WorldGraph,
+        target: u64,
+        removed_node: u64,
+    ) -> CounterfactualVerdict {
+        let factual = self.infer(world, target);
+        let counterfactual = self.infer_without_node(world, target, removed_node);
+        CounterfactualVerdict {
+            support_delta: factual.support - counterfactual.support,
+            opposition_delta: factual.opposition - counterfactual.opposition,
+            factual,
+            counterfactual,
+            removed_node,
+        }
+    }
+
+    fn infer_filtered(
+        &self,
+        world: &WorldGraph,
+        target: u64,
+        removed_node: Option<u64>,
+    ) -> ReasoningVerdict {
         let mut frontier: Vec<CausalPath> = world
             .edges()
             .iter()
-            .filter(|r| r.to == target && causal(r.kind))
+            .filter(|r| {
+                r.to == target
+                    && causal(r.kind)
+                    && removed_node.is_none_or(|x| r.from != x && r.to != x)
+            })
             .map(|r| CausalPath {
                 nodes: vec![r.from, r.to],
                 score: edge_score(r),
@@ -64,7 +112,11 @@ impl CausalReasoner {
                 let Some(&head) = path.nodes.first() else {
                     continue;
                 };
-                for r in world.edges().iter().filter(|r| r.to == head && causal(r.kind)) {
+                for r in world.edges().iter().filter(|r| {
+                    r.to == head
+                        && causal(r.kind)
+                        && removed_node.is_none_or(|x| r.from != x && r.to != x)
+                }) {
                     if path.nodes.contains(&r.from) {
                         continue;
                     }
