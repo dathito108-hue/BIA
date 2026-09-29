@@ -58,6 +58,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     );
 
     public static native String nativeImmediateToken(String input);
+    public static native String nativeBenchmarkV12(int iterations);
     public static native long nativeCycleCount();
     public static native String nativeStatus();
     public static native boolean nativeSave(String path);
@@ -418,6 +419,18 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
         addBubble(text, true);
         input.setText("");
+
+        if (text.equalsIgnoreCase("/bench") || text.equalsIgnoreCase("benchmark")) {
+            new Thread(() -> {
+                String report = nativeBenchmarkV12(5000);
+                runOnUiThread(() -> {
+                    lastReply = report;
+                    addBubble(report, false);
+                    refreshStatus();
+                });
+            }, "bia-device-benchmark").start();
+            return;
+        }
 
         String instant = nativeImmediateToken(text);
         if (instant != null && !instant.isEmpty()) {

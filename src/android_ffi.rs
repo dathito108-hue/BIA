@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 
 use jni::objects::{JClass, JString};
 use jni::sys::{jboolean, jfloat, jint, jlong, jstring};
@@ -171,6 +172,47 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeIngestContent(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeBenchmarkV12(
+    mut env: JNIEnv,
+    _class: JClass,
+    iterations: jint,
+) -> jstring {
+    let loops = iterations.clamp(100, 20_000) as usize;
+    let start = Instant::now();
+    let mut tokens = 0usize;
+
+    if let Ok(mut app) = runtime().lock() {
+        for i in 0..loops {
+            let input = match i % 5 {
+                0 => "Mở YouTube",
+                1 => "Tìm web Phật giáo Trúc Lâm",
+                2 => "Tại sao cần provenance",
+                3 => "Suy luận logic trừu tượng",
+                _ => "Không thực thi nếu chưa xác nhận",
+            };
+            tokens += app.decoder.generate(input, 8).tokens.len();
+        }
+        let elapsed = start.elapsed();
+        let ns_per_token = elapsed.as_nanos() / tokens.max(1) as u128;
+        let tokens_per_sec = if elapsed.as_nanos() == 0 {
+            0
+        } else {
+            (tokens as u128 * 1_000_000_000u128) / elapsed.as_nanos()
+        };
+        return java_string(
+            &mut env,
+            format!(
+                "V12 device benchmark: loops={loops}, tokens={tokens}, elapsed_ms={}, ns/token={ns_per_token}, tokens/s={tokens_per_sec}, vocab={}",
+                elapsed.as_millis(),
+                app.learned_vocab_len()
+            ),
+        );
+    }
+
+    java_string(&mut env, "V12 benchmark unavailable".to_string())
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
@@ -200,11 +242,12 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeStatus(
                 String::new()
             };
             format!(
-                "Chu kỳ {}  •  Cảnh {}  •  Chủng tử {}  •  Nguồn {}{}{}",
+                "Chu kỳ {}  •  Cảnh {}  •  Chủng tử {}  •  Nguồn {}  •  Từ vựng {}{}{}",
                 app.bia.cycle(),
                 app.bia.world.len(),
                 app.bia.memory.len(),
                 app.knowledge.len(),
+                app.learned_vocab_len(),
                 goal,
                 queue
             )
