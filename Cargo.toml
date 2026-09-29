@@ -1,6 +1,6 @@
 [package]
 name = "bia-core"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "BIA-DCA: device-scalable Buddhist-inspired computational intelligence runtime"
 license = "Apache-2.0"
@@ -8,11 +8,14 @@ license = "Apache-2.0"
 [lib]
 name = "bia_core"
 path = "src/lib.rs"
+crate-type = ["rlib", "cdylib"]
 
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
+strip = true
 
-[dependencies]
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
