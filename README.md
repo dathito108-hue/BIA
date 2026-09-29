@@ -316,3 +316,20 @@ This block reduces dependence on fixed semantic markers while keeping BIA mobile
 - **Android proof:** `/semantic` runs the V61–V80 learned-semantic suite natively.
 
 This is not a pretrained language model: the encoder is small, deterministic and online-learned. It improves paraphrase tolerance and semantic retrieval inside the defined proof families, but does not provide unrestricted language understanding comparable to frontier foundation models.
+
+
+## Inference V81–V100 — Continual Semantic Learning & Generative Cognition
+
+This milestone closes the loop between learned semantics, durable concepts, explicit reasoning and generated responses.
+
+- **Continual semantic learner:** bounded online concept vectors with decreasing update rates to reduce semantic drift.
+- **Anchor-based anti-forgetting:** important concepts can be anchored and restored when later updates cause excessive drift.
+- **Concept composition:** up to eight semantic parts can be combined into one compact compositional vector.
+- **Latent-symbol bridge:** compact semantic vectors remain linked to inspectable symbolic IDs/labels.
+- **Semantic consolidation:** selected important concepts are anchored and repaired in a bounded consolidation pass.
+- **Reasoning-conditioned generation:** causal, opposing, contradictory and counterfactual results are rendered according to evidence depth, confidence and uncertainty rather than the old fixed answer templates.
+- **Uncertainty-aware wording:** strong support, weak support and contradiction produce different response stances.
+- **Android proof:** `/continual` runs the V81–V100 suite natively.
+- **App version:** 1.0.0.
+
+The response generator is a small deterministic cognitive surface planner, not a pretrained autoregressive language model. It demonstrates reasoning-conditioned generation and continual semantic stability inside BIA's bounded architecture; it does not establish unrestricted human-level language generation or AGI.
