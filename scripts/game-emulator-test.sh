@@ -15,5 +15,5 @@ adb pull /sdcard/Android/data/com.bia.mobile/files/game-fps-proof.png game-evide
 python3 - <<'PY'
 from pathlib import Path
 s=Path('game-evidence/instrumentation.txt').read_text()
-assert 'OK (1 test)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, s
+assert 'OK (3 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, s
 PY
