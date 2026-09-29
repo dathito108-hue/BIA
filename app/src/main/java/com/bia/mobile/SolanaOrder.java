@@ -46,7 +46,7 @@ final class SolanaOrder {
         Request.Builder req=new Request.Builder().url(url.build());if(!apiKey.isEmpty())req.header("x-api-key",apiKey);
         return new SolanaOrder(rpc.request(req.build()),owner,sellSol,n,bps,maxFee,began);
     }
-    long preflight(SolanaRpc rpc)throws Exception{fresh();if(transaction==null)throw new IllegalStateException("Chưa liên kết ví");rpc.verifyMainnet();long fee=rpc.preflight(transaction,feeBudget-rentFee);BigInteger need=BigInteger.valueOf(Math.addExact(fee,rentFee));if(input.equals(SOL))need=need.add(inAmount);if(rpc.balance(owner).compareTo(need)<0)throw new IllegalStateException("Thiếu SOL đầu vào/phí/rent");fresh();return fee;}
+    long preflight(SolanaRpc rpc)throws Exception{fresh();if(transaction==null)throw new IllegalStateException("Chưa liên kết ví");rpc.verifyMainnet();SolanaAudit.verify(rpc,this);long fee=rpc.preflight(transaction,feeBudget-rentFee);BigInteger need=BigInteger.valueOf(Math.addExact(fee,rentFee));if(input.equals(SOL))need=need.add(inAmount);if(rpc.balance(owner).compareTo(need)<0)throw new IllegalStateException("Thiếu SOL đầu vào/phí/rent");fresh();return fee;}
     JSONObject execute(SolanaRpc rpc,String apiKey,SolanaWire.Transaction signed)throws Exception{
         fresh();if(!java.util.Arrays.equals(transaction.message,signed.message))throw new IllegalStateException("Nội dung ký không khớp");
         JSONObject body=SolanaRpc.object("signedTransaction",Base64.encodeToString(signed.bytes,Base64.NO_WRAP),"requestId",requestId);

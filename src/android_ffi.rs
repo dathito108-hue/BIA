@@ -885,3 +885,19 @@ pub extern "system" fn Java_com_bia_mobile_TradingNative_analyze(
     }else{"CHẶN PHÂN TÍCH: đang chờ nến từ nguồn".into()};
     java_string(&mut env,value)
 }
+
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_TradingNative_quality(
+    mut env: JNIEnv, _class:JClass, points:jni::objects::JDoubleArray,
+    now_ms:jlong, cost:jni::sys::jdouble,
+)->jstring {
+    let n=env.get_array_length(&points).unwrap_or(0);
+    let value=if (42..=480).contains(&n) && n%2==0 && now_ms>0 {
+        let mut data=vec![0.0;n as usize];
+        if env.get_double_array_region(&points,0,&mut data).is_err(){"Lỗi quan sát JNI".into()}else{
+            let observations:Vec<_>=data.chunks_exact(2).map(|v|(if v[0].is_finite() && v[0]>0.0 {v[0] as u64}else{0},v[1])).collect();
+            crate::trading_quality::text(&observations,now_ms as u64,cost)
+        }
+    }else{"Chờ ít nhất 21 báo giá thật; chưa đủ bằng chứng".into()};
+    java_string(&mut env,value)
+}

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="database" path="bia-trading-v137.db" />
+        <exclude domain="database" path="bia-trading-v137.db-wal" />
+        <exclude domain="database" path="bia-trading-v137.db-shm" />
+        <exclude domain="sharedpref" path="solana-orders.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="database" path="bia-trading-v137.db" />
+        <exclude domain="database" path="bia-trading-v137.db-wal" />
+        <exclude domain="database" path="bia-trading-v137.db-shm" />
+        <exclude domain="sharedpref" path="solana-orders.xml" />
+    </device-transfer>
+</data-extraction-rules>
