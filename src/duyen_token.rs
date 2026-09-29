@@ -87,7 +87,7 @@ impl DuyenTokenDecoder {
                 .wrapping_add(previous))
                 % VOCAB.len();
 
-            let token = if step >= 4 && !self.learned_vocab.is_empty() && (decision.winner as usize + step) % 3 == 0 {
+            let token = if step >= 4 && !self.learned_vocab.is_empty() && (decision.winner as usize + step).is_multiple_of(3) {
                 let learned_idx = ((decision.winner as usize * 11)
                     .wrapping_add(previous)
                     .wrapping_add(step))
