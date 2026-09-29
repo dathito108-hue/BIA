@@ -18,3 +18,4 @@ jobs:
       - run: cargo test --release
       - run: cargo run --release --example v11_bench
       - run: cargo run --release --example v12_bench
+      - run: cargo run --release --example v14_stress
