@@ -155,6 +155,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             refreshStatus();
         });
         root.addView(stopExecution);
+        Button game = compactButton("Game: quan sát và đa chạm");
+        game.setOnClickListener(v -> startActivity(new Intent(this, GameSetupActivity.class)));
+        root.addView(game);
 
         scroll = new ScrollView(this);
         scroll.setFillViewport(true);

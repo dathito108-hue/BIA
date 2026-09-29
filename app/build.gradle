@@ -5,13 +5,17 @@ plugins {
 android {
     namespace "com.bia.mobile"
     compileSdk 35
+    useLibrary "android.test.runner"
+    useLibrary "android.test.base"
+    useLibrary "android.test.mock"
 
     defaultConfig {
         applicationId "com.bia.mobile"
         minSdk 26
         targetSdk 35
-        versionCode 133
-        versionName "1.33.0"
+        testInstrumentationRunner "android.test.InstrumentationTestRunner"
+        versionCode 134
+        versionName "1.34.0"
     }
 
     buildTypes {
