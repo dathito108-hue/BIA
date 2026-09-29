@@ -57,6 +57,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             int memoryMb
     );
 
+    public static native String nativeImmediateToken(String input);
     public static native long nativeCycleCount();
     public static native String nativeStatus();
     public static native boolean nativeSave(String path);
@@ -198,7 +199,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         labels.setPadding(dp(14), 0, 0, 0);
         labels.addView(text("BIA", 24, TEXT, Typeface.BOLD));
         labels.addView(text(
-                "Trí tuệ Duyên khởi • Perception + Planner + Provenance V8",
+                "Trí tuệ Duyên khởi • Tam-Thiên Matrix V9",
                 13,
                 MUTED,
                 Typeface.NORMAL
@@ -418,6 +419,11 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         addBubble(text, true);
         input.setText("");
 
+        String instant = nativeImmediateToken(text);
+        if (instant != null && !instant.isEmpty()) {
+            addBubble(instant + " …", false);
+        }
+
         ActivityManager am = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
         ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
         am.getMemoryInfo(mi);
@@ -427,27 +433,32 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         float battery = readBattery();
         float thermal = readThermal();
         float load = mi.lowMemory ? 0.90f : 0.25f;
+        boolean shouldSpeak = voiceTurn;
+        voiceTurn = false;
 
-        String reply = nativeChat(
-                text,
-                SystemClock.elapsedRealtime(),
-                battery,
-                thermal,
-                load,
-                memoryMb
-        );
+        new Thread(() -> {
+            String reply = nativeChat(
+                    text,
+                    SystemClock.elapsedRealtime(),
+                    battery,
+                    thermal,
+                    load,
+                    memoryMb
+            );
 
-        lastReply = reply;
-        addBubble(reply, false);
+            runOnUiThread(() -> {
+                lastReply = reply;
+                addBubble(reply, false);
 
-        if (voiceTurn) {
-            voiceTurn = false;
-            speak(reply);
-        }
+                if (shouldSpeak) {
+                    speak(reply);
+                }
 
-        handlePendingAction();
-        persistAll();
-        refreshStatus();
+                handlePendingAction();
+                persistAll();
+                refreshStatus();
+            });
+        }, "bia-tam-thien").start();
     }
 
     private float readBattery() {
