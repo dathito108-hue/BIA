@@ -25,6 +25,7 @@ pub mod planning;
 pub mod memory;
 pub mod mobile;
 pub mod persistence;
+pub mod reasoning;
 pub mod runtime;
 pub mod token_stream;
 pub mod types;
@@ -39,7 +40,7 @@ pub use continuity::{decode_continuity, encode_continuity, ContinuityState};
 pub use core::{BiaDca, BiaDcaConfig};
 pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
-pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, V11Report, V12Report, V14StressReport};
+pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport};
 pub use four_matrix::{
     adaptive_realm_weights, classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
     FourMatrixOutput, PerspectiveProjection, RealmBand, AGGREGATES,
@@ -56,6 +57,7 @@ pub use planning::{DeepQuan, Plan, PlanStep};
 pub use memory::{Seed, SeedMemory};
 pub use mobile::{MobileReply, OfflineMobileBia};
 pub use persistence::{decode, encode, read_file, write_atomic, DharmaSnapshot, PersistenceError};
+pub use reasoning::{CausalPath, CausalReasoner, ReasoningVerdict};
 pub use runtime::{CapacityTier, RuntimeProfile, RuntimeTarget};
 pub use token_stream::{InstantToken, InstantTokenEmitter};
 pub use types::*;
@@ -713,6 +715,89 @@ mod tests {
             assert!(!seq.tokens.is_empty());
             assert!(seq.tokens.len() <= 48);
         }
+    }
+
+    #[test]
+    fn multi_hop_reasoning_finds_three_node_chain() {
+        let mut world = WorldGraph::new(16, 32);
+        world.relate(Relation {
+            from: 1,
+            to: 2,
+            kind: RelationKind::Causes,
+            strength: 0.95,
+            confidence: 0.95,
+        });
+        world.relate(Relation {
+            from: 2,
+            to: 3,
+            kind: RelationKind::Enables,
+            strength: 0.9,
+            confidence: 0.9,
+        });
+        let verdict = CausalReasoner::default().infer(&world, 3);
+        assert!(verdict.support > 0.6);
+        assert_eq!(
+            verdict.best_path.as_ref().map(|p| p.nodes.as_slice()),
+            Some([1, 2, 3].as_slice())
+        );
+    }
+
+    #[test]
+    fn contradiction_reduces_reasoning_confidence() {
+        let mut world = WorldGraph::new(16, 32);
+        world.relate(Relation {
+            from: 1,
+            to: 3,
+            kind: RelationKind::Causes,
+            strength: 0.9,
+            confidence: 0.9,
+        });
+        let reasoner = CausalReasoner::default();
+        let before = reasoner.infer(&world, 3);
+        world.relate(Relation {
+            from: 2,
+            to: 3,
+            kind: RelationKind::Inhibits,
+            strength: 0.9,
+            confidence: 0.9,
+        });
+        let after = reasoner.infer(&world, 3);
+        assert!(after.contradicted);
+        assert!(after.confidence < before.confidence);
+    }
+
+    #[test]
+    fn new_evidence_revises_hypothesis_direction() {
+        let mut world = WorldGraph::new(16, 32);
+        world.relate(Relation {
+            from: 1,
+            to: 3,
+            kind: RelationKind::Causes,
+            strength: 0.7,
+            confidence: 0.8,
+        });
+        let reasoner = CausalReasoner::default();
+        let before = reasoner.infer(&world, 3);
+        let after = reasoner.revise_with_relation(
+            &mut world,
+            Relation {
+                from: 2,
+                to: 3,
+                kind: RelationKind::Inhibits,
+                strength: 1.0,
+                confidence: 1.0,
+            },
+            3,
+        );
+        assert!(before.support > before.opposition);
+        assert!(after.opposition > after.support);
+    }
+
+    #[test]
+    fn v15_reasoning_quality_suite_passes() {
+        let report = run_v15_reasoning_evaluation();
+        assert!(report.passed(), "report={report:?}");
+        assert_eq!(report.accuracy(), 1.0);
     }
 
 }

@@ -176,3 +176,19 @@ V14 adds stronger evidence for the bounded recurrent decoder:
 - Android `/stress` command runs 10,000 iterations natively on the actual device and reports pass/fail plus timing.
 
 This proves robustness only for the explicit invariants and stress corpus above. It is not a claim of open-domain intelligence quality.
+
+
+## Inference V15 — Reasoning Quality Proof
+
+V15 strengthens reasoning quality rather than raw throughput.
+
+- Bounded multi-hop causal reasoning up to depth 4 with beam 12.
+- Explicit support vs opposition accumulation.
+- Contradiction detection when both positive and inhibiting causal evidence are present.
+- Confidence is reduced when evidence conflicts.
+- New evidence can revise the current causal verdict.
+- Unrelated graph updates do not disturb an existing causal conclusion.
+- Multi-hop paths are fed back into BIA contemplation as hypotheses.
+- Android command `/reason` runs the reasoning-quality suite natively.
+
+The V15 suite uses synthetic causal graphs with known expected answers. Passing it proves these reasoning invariants, not general open-domain reasoning ability.

@@ -3,6 +3,7 @@ use crate::four_matrix::{AggregateVector, FourMatrixKernel, FourMatrixOutput, Re
 use crate::meaning::MeaningFormation;
 use crate::inference_matrix::{f32_to_q15, MatrixDecision, MatrixSignal, TamThienMatrix};
 use crate::memory::SeedMemory;
+use crate::reasoning::{CausalReasoner, ReasoningVerdict};
 use crate::persistence::DharmaSnapshot;
 use crate::types::{CognitiveMoment, Hypothesis, Intention, Phenomenon, Relation, RelationKind};
 use crate::world::WorldGraph;
@@ -38,6 +39,7 @@ pub struct BiaDca {
     previous_observation: Option<Phenomenon>,
     matrix: TamThienMatrix,
     four_matrix: FourMatrixKernel,
+    reasoner: CausalReasoner,
 }
 
 impl BiaDca {
@@ -51,6 +53,7 @@ impl BiaDca {
             previous_observation: None,
             matrix: TamThienMatrix::default(),
             four_matrix: FourMatrixKernel::default(),
+            reasoner: CausalReasoner::default(),
         }
     }
 
@@ -64,6 +67,7 @@ impl BiaDca {
             previous_observation: None,
             matrix: TamThienMatrix::default(),
             four_matrix: FourMatrixKernel::default(),
+            reasoner: CausalReasoner::default(),
         }
     }
 
@@ -147,6 +151,22 @@ impl BiaDca {
         }
         for _ in 0..budget.contemplation_cycles {
             reinforce_consistent(&mut hypotheses, &causes);
+        }
+
+        let reasoning = self.reasoner.infer(&self.world, focus.id);
+        if let Some(path) = &reasoning.best_path {
+            if path.nodes.len() > 2 {
+                hypotheses.push(Hypothesis {
+                    source: *path.nodes.first().unwrap_or(&focus.id),
+                    target: focus.id,
+                    score: if path.inhibited {
+                        reasoning.opposition
+                    } else {
+                        reasoning.support
+                    },
+                    support: path.nodes.clone(),
+                });
+            }
         }
         hypotheses.sort_by(|a, b| {
             b.score
@@ -252,6 +272,15 @@ impl BiaDca {
             });
         }
         self.matrix.infer(&signals)
+    }
+
+    pub fn reason_about(&self, target: u64) -> ReasoningVerdict {
+        self.reasoner.infer(&self.world, target)
+    }
+
+    pub fn revise_reasoning(&mut self, relation: Relation, target: u64) -> ReasoningVerdict {
+        self.reasoner
+            .revise_with_relation(&mut self.world, relation, target)
     }
 
     pub fn experience(&mut self, p: &Phenomenon, meaning: u32, benefit: f32, harm: f32) {

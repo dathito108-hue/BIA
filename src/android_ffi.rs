@@ -241,6 +241,32 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeStressV14(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeReasoningV15(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let report = crate::run_v15_reasoning_evaluation();
+    java_string(
+        &mut env,
+        format!(
+            "V15 reasoning: pass={}, cases={}, multi_hop={}/{}, contradiction={}/{}, revision={}/{}, persistence={}/{}, accuracy={:.3}, elapsed_us={}",
+            report.passed(),
+            report.cases,
+            report.multi_hop_passes,
+            report.cases,
+            report.contradiction_passes,
+            report.cases,
+            report.revision_passes,
+            report.cases,
+            report.causal_persistence_passes,
+            report.cases,
+            report.accuracy(),
+            report.elapsed.as_micros()
+        ),
+    )
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
