@@ -1,8 +1,8 @@
 [package]
 name = "bia-core"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-description = "BIA-KSANA-1 mobile-first Buddhist-inspired process intelligence reference core"
+description = "BIA-DCA: device-scalable Buddhist-inspired computational intelligence runtime"
 license = "Apache-2.0"
 
 [lib]
