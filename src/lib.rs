@@ -582,7 +582,7 @@ mod tests {
 
     #[test]
     fn core_fast_matrix_runs_without_world_scan() {
-        let bia = BiaDca::new(BiaDcaConfig::default());
+        let mut bia = BiaDca::new(BiaDcaConfig::default());
         let focus = Phenomenon::new(
             1,
             WorldLevel::TieuThien,
