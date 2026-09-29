@@ -8,6 +8,9 @@ use crate::discovery::ContextDiscovery;
 use crate::episodic::EpisodicMemory;
 use crate::analogy::AnalogicalReasoner;
 use crate::hierarchy::HierarchicalAbstraction;
+use crate::hybrid_semantic::{HybridSemanticReasoner, LatentInference};
+use crate::latent_memory::LatentMemory;
+use crate::latent_relation::LatentRelationLearner;
 use crate::induction::{InducedRelation, InductiveReasoner};
 use crate::knowledge_governor::{KnowledgeAssessment, KnowledgeGovernor};
 use crate::meta_rules::MetaRuleCompressor;
@@ -17,7 +20,9 @@ use crate::recursive_deliberation::{RecursiveDeliberator, RecursiveResult};
 use crate::self_directed_compute::{ComputeRoute, SelfDirectedCompute};
 use crate::skill_transfer::CrossDomainTransfer;
 use crate::rules::RuleSynthesizer;
-use crate::semantic::SemanticScene;
+use crate::semantic::{concept_id, SemanticScene};
+use crate::semantic_compression::SemanticCompressor;
+use crate::types::RelationKind;
 use crate::world::WorldGraph;
 
 #[derive(Clone, Debug, Default)]
@@ -40,6 +45,10 @@ pub struct OpenIntelligence {
     recursive: RecursiveDeliberator,
     compute: SelfDirectedCompute,
     transfer: CrossDomainTransfer,
+    latent_memory: LatentMemory,
+    latent_relations: LatentRelationLearner,
+    hybrid: HybridSemanticReasoner,
+    semantic_compressor: SemanticCompressor,
 }
 
 impl OpenIntelligence {
@@ -47,6 +56,13 @@ impl OpenIntelligence {
         let _ = self.abstraction.learn_from_text(text);
         let canonical = self.abstraction.canonicalize_text(text);
         let scene = self.semantic.ingest(world, &canonical, timestamp);
+        self.latent_memory.remember(concept_id(&canonical), &canonical, 0.85);
+        let _ = self.semantic_compressor.observe(&canonical, 0.85);
+        for clause in &scene.clauses {
+            let example = format!("{} -> {}", clause.subject.text, clause.object.text);
+            self.latent_relations
+                .observe(&example, clause.kind, clause.confidence);
+        }
         self.episodes.observe(&scene, timestamp, 0.5);
         let _ = self.discovery.apply(world);
         let _ = self.hierarchy.discover(world);
@@ -172,6 +188,41 @@ impl OpenIntelligence {
 
     pub fn transfer_engine(&self) -> &CrossDomainTransfer {
         &self.transfer
+    }
+
+    pub fn observe_relation_example(
+        &mut self,
+        text: &str,
+        kind: RelationKind,
+        confidence: f32,
+    ) {
+        self.latent_relations.observe(text, kind, confidence);
+        self.latent_memory.remember(concept_id(text), text, confidence);
+        let _ = self.semantic_compressor.observe(text, confidence);
+    }
+
+    pub fn classify_latent_relation(&self, text: &str) -> Option<(RelationKind, f32)> {
+        self.latent_relations.classify(text)
+    }
+
+    pub fn infer_latent_clause(&self, sentence: &str) -> Option<LatentInference> {
+        self.hybrid.infer_clause(&self.latent_relations, sentence)
+    }
+
+    pub fn apply_latent_clause(&self, world: &mut WorldGraph, sentence: &str) -> bool {
+        let Some(inference) = self.infer_latent_clause(sentence) else {
+            return false;
+        };
+        self.hybrid.apply(world, &inference);
+        true
+    }
+
+    pub fn latent_nearest(&self, text: &str, limit: usize) -> Vec<(crate::latent_memory::LatentItem, f32)> {
+        self.latent_memory.nearest(text, limit)
+    }
+
+    pub fn semantic_cluster_count(&self) -> usize {
+        self.semantic_compressor.len()
     }
 
     pub fn analogy(&self) -> &AnalogicalReasoner {
