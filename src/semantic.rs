@@ -122,6 +122,12 @@ fn parse_clause(s: &str) -> Option<SemanticClause> {
         }
     }
 
+    for marker in [" giong ", " tuong tu ", " gan giong "] {
+        if let Some((a, b)) = split_once_nonempty(s, marker) {
+            return clause(a, b, RelationKind::Similar, 0.90);
+        }
+    }
+
     None
 }
 
