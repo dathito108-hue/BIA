@@ -5,12 +5,12 @@ Tam Thiên WorldGraph, Duyên relations, bounded CognitiveMoment, Chủng tử m
 
 **Acceptance:** dependency-free Rust core; deterministic ceilings; tests; no imported model-family core.
 
-## D1 — Persistent Dharma Memory
+## D1 — Persistent Dharma Memory ✅
 Binary portable storage for phenomena, relations, seeds, confidence and provenance; crash-safe append/checkpoint/restore.
 
 **Acceptance:** same memory file can move between Android/desktop builds; bounded corruption recovery.
 
-## D2 — Meaning Formation
+## D2 — Meaning Formation ✅
 Incremental concept formation from repeated phenomena, relation induction, contradiction tracking, confidence calibration and forgetting.
 
 **Acceptance:** learns new categories/relations from experience without global weight retraining.
@@ -66,3 +66,10 @@ BIA is considered mature only when all of the following are demonstrated empiric
 6. bounded resource usage;
 7. transparent, inspectable memory and hypotheses;
 8. no hidden dependence on an LLM/Transformer/SSM/Mamba runtime.
+
+
+### D1/D2 implementation note
+
+D1 provides a versioned binary snapshot format with checksum verification, bounded decode limits, portable world/seed restoration and atomic checkpoint replacement.
+
+D2 provides bounded emergent concepts, prototype consolidation, contradiction-based confidence revision and temporal relation induction. These mechanisms operate on BIA phenomena and relations rather than on a hidden external model.
