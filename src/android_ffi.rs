@@ -6,7 +6,8 @@ use jni::sys::{jboolean, jfloat, jint, jlong, jstring};
 use jni::JNIEnv;
 
 use crate::{
-    read_file, write_atomic, BiaDca, BiaDcaConfig, DeviceState, OfflineMobileBia,
+    encode_action, read_file, write_atomic, BiaDca, BiaDcaConfig, DeviceState,
+    OfflineMobileBia,
 };
 
 static RUNTIME: OnceLock<Mutex<OfflineMobileBia>> = OnceLock::new();
@@ -59,6 +60,31 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeChat(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativePendingAction(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let encoded = runtime()
+        .lock()
+        .ok()
+        .and_then(|app| app.pending_action().map(encode_action))
+        .unwrap_or_default();
+    java_string(&mut env, encoded)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeResolveAction(
+    _env: JNIEnv,
+    _class: JClass,
+    success: jboolean,
+    timestamp: jlong,
+) {
+    if let Ok(mut app) = runtime().lock() {
+        app.resolve_pending_action(success != 0, timestamp.max(0) as u64);
+    }
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
@@ -77,11 +103,17 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeStatus(
     let status = runtime()
         .lock()
         .map(|app| {
+            let goal = app
+                .goals
+                .active()
+                .map(|g| format!("  •  Mục tiêu {:.0}%", g.progress * 100.0))
+                .unwrap_or_default();
             format!(
-                "Chu kỳ {}  •  Cảnh {}  •  Chủng tử {}",
+                "Chu kỳ {}  •  Cảnh {}  •  Chủng tử {}{}",
                 app.bia.cycle(),
                 app.bia.world.len(),
-                app.bia.memory.len()
+                app.bia.memory.len(),
+                goal
             )
         })
         .unwrap_or_else(|_| "BIA đang bận".to_string());
