@@ -3,9 +3,11 @@
 #[cfg(target_os = "android")]
 pub mod android_ffi;
 pub mod action;
+pub mod action_queue;
 pub mod adaptation;
 pub mod budget;
 pub mod capability;
+pub mod continuity;
 pub mod core;
 pub mod dialogue;
 pub mod curriculum;
@@ -22,9 +24,11 @@ pub mod types;
 pub mod world;
 
 pub use action::{ActionDecision, ActionProposal, Authority, CuTranPolicy};
+pub use action_queue::ActionQueue;
 pub use adaptation::{causal_credit, evaluate_delta, PromotionDecision, SkillDelta};
 pub use budget::{middle_way, Budget, DeviceState};
-pub use capability::{encode_action, infer_device_action, DeviceAction, DeviceActionKind};
+pub use capability::{action_for_goal, encode_action, infer_device_action, DeviceAction, DeviceActionKind};
+pub use continuity::{decode_continuity, encode_continuity, ContinuityState};
 pub use core::{BiaDca, BiaDcaConfig};
 pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
 pub use goals::{Goal, GoalStack, GoalStatus};
@@ -455,6 +459,38 @@ mod tests {
         app.resolve_pending_action(true, 41);
         assert!(app.bia.memory.len() > before);
         assert!(app.pending_action().is_none());
+    }
+
+    #[test]
+    fn continuity_roundtrip_restores_goal_and_action_queue() {
+        let bia = BiaDca::new(BiaDcaConfig::default());
+        let mut app = OfflineMobileBia::new(bia);
+        app.converse("Mục tiêu: tìm tài liệu Rust", 100, device())
+            .expect("goal");
+        app.converse("Tiếp tục", 101, device()).expect("continue");
+        assert!(app.pending_action().is_some());
+
+        let state = app.continuity_export();
+        let mut restored = OfflineMobileBia::new(BiaDca::new(BiaDcaConfig::default()));
+        assert!(restored.continuity_import(&state));
+        assert!(restored.goals.active().is_some());
+        assert!(restored.pending_action().is_some());
+    }
+
+    #[test]
+    fn failed_action_clears_remaining_queue_and_blocks_goal() {
+        let bia = BiaDca::new(BiaDcaConfig::default());
+        let mut app = OfflineMobileBia::new(bia);
+        app.converse("Mục tiêu: tìm tài liệu Rust", 110, device())
+            .expect("goal");
+        app.converse("Tiếp tục", 111, device()).expect("continue");
+        assert!(app.queue_len() > 0);
+        app.resolve_pending_action(false, 112);
+        assert_eq!(app.queue_len(), 0);
+        assert_eq!(
+            app.goals.active().map(|g| g.status),
+            None
+        );
     }
 
 }
