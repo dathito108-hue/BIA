@@ -214,6 +214,6 @@ mod tests {
         let mut damaged = bytes;
         let last = damaged.len() - 1;
         damaged[last] ^= 0x55;
-        assert_eq!(decode(&damaged), Err(PersistenceError::ChecksumMismatch));
+        assert!(matches!(\n            decode(&damaged),\n            Err(PersistenceError::ChecksumMismatch)\n        ));
     }
 }
