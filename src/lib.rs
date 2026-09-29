@@ -12,9 +12,11 @@ pub mod core;
 pub mod dialogue;
 pub mod curriculum;
 pub mod goals;
+pub mod knowledge;
 pub mod language;
 pub mod meaning;
 pub mod perception;
+pub mod planner;
 pub mod planning;
 pub mod memory;
 pub mod mobile;
@@ -33,9 +35,11 @@ pub use core::{BiaDca, BiaDcaConfig};
 pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
 pub use goals::{Goal, GoalStack, GoalStatus};
 pub use curriculum::{score as score_curriculum, CurriculumDomain, CurriculumScore, TrialResult};
+pub use knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
 pub use language::{LanguageIntent, VietnameseGate};
 pub use meaning::{Concept, MeaningFormation};
 pub use perception::{MultiCanh, PerceptPacket};
+pub use planner::{decompose_goal, Plan as DevicePlan};
 pub use planning::{DeepQuan, Plan, PlanStep};
 pub use memory::{Seed, SeedMemory};
 pub use mobile::{MobileReply, OfflineMobileBia};
@@ -490,6 +494,53 @@ mod tests {
         assert_eq!(
             app.goals.active().map(|g| g.status),
             None
+        );
+    }
+
+    #[test]
+    fn planner_decomposes_explicit_multi_step_goal() {
+        let plan = decompose_goal(
+            "Tìm web Phật giáo Trúc Lâm rồi mở https://example.com",
+            700,
+        );
+        assert_eq!(plan.steps.len(), 2);
+    }
+
+    #[test]
+    fn provenance_ingestion_becomes_knowledge_and_memory() {
+        let bia = BiaDca::new(BiaDcaConfig::default());
+        let mut app = OfflineMobileBia::new(bia);
+        let before = app.bia.memory.len();
+        let count = app.ingest_content(
+            "note.txt",
+            ProvenanceKind::LocalDocument,
+            "Trúc Lâm là nguồn tài liệu thử nghiệm cho BIA.",
+            800,
+            0.9,
+        );
+        assert!(count > 0);
+        assert_eq!(app.knowledge.len(), 1);
+        assert!(app.bia.memory.len() > before);
+    }
+
+    #[test]
+    fn continuity_v2_keeps_provenance_records() {
+        let bia = BiaDca::new(BiaDcaConfig::default());
+        let mut app = OfflineMobileBia::new(bia);
+        app.ingest_content(
+            "shared",
+            ProvenanceKind::SharedText,
+            "nội dung có nguồn",
+            900,
+            0.8,
+        );
+        let state = app.continuity_export();
+        let mut restored = OfflineMobileBia::new(BiaDca::new(BiaDcaConfig::default()));
+        assert!(restored.continuity_import(&state));
+        assert_eq!(restored.knowledge.len(), 1);
+        assert_eq!(
+            restored.knowledge.recent().map(|r| r.source.as_str()),
+            Some("shared")
         );
     }
 
