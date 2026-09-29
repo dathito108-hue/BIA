@@ -158,3 +158,92 @@ pub fn run_v12_evaluation() -> V12Report {
         elapsed: start.elapsed(),
     }
 }
+
+
+#[derive(Clone, Debug)]
+pub struct V14StressReport {
+    pub iterations: usize,
+    pub bounded_token_passes: usize,
+    pub finite_state_passes: usize,
+    pub noise_passes: usize,
+    pub deterministic_replay_passes: usize,
+    pub elapsed: Duration,
+}
+
+impl V14StressReport {
+    pub fn passed(&self) -> bool {
+        self.bounded_token_passes == self.iterations
+            && self.finite_state_passes == self.iterations
+            && self.noise_passes == self.iterations
+            && self.deterministic_replay_passes == self.iterations
+    }
+
+    pub fn ns_per_iteration(&self) -> u128 {
+        self.elapsed.as_nanos() / self.iterations.max(1) as u128
+    }
+}
+
+pub fn run_v14_stress(iterations: usize) -> V14StressReport {
+    let iterations = iterations.clamp(100, 50_000);
+    let corpus = [
+        "Mở ứng dụng rồi tìm tài liệu",
+        "Tại sao trạng thái cần được giới hạn?",
+        "Không thực thi nếu chưa xác nhận",
+        "Suy luận logic trừu tượng với dữ kiện mới",
+        "Đọc tệp trên điện thoại và ghi nhớ provenance",
+        "###@@@ nhiễu 12345 ??? tiếng Việt vẫn phải chạy",
+        "😀🙏📱 kiểm tra unicode và biểu tượng",
+        "mục tiêu: phân tích hệ thống theo nhiều góc nhìn",
+    ];
+
+    let start = Instant::now();
+    let mut bounded = 0usize;
+    let mut finite = 0usize;
+    let mut noise = 0usize;
+    let mut deterministic = 0usize;
+
+    let mut decoder = DuyenTokenDecoder::default();
+    let _ = decoder.learn_text(
+        "tamthien duyenkhoi nguuan tinhkhong trungdao thienhanh provenance causality",
+    );
+
+    for i in 0..iterations {
+        let input = corpus[i % corpus.len()];
+        let before = decoder.state();
+        let seq = decoder.generate(input, 48);
+        if !seq.tokens.is_empty() && seq.tokens.len() <= 48 {
+            bounded += 1;
+        }
+
+        let state = decoder.state();
+        if state.iter().all(|v| *v != i16::MIN && *v != i16::MAX) {
+            finite += 1;
+        }
+
+        if seq.tokens.iter().all(|t| !t.is_empty() && t.chars().count() <= 32) {
+            noise += 1;
+        }
+
+        let mut a = DuyenTokenDecoder::default();
+        let mut b = DuyenTokenDecoder::default();
+        let _ = a.learn_text("tamthien duyenkhoi nguuan tinhkhong");
+        let _ = b.learn_text("tamthien duyenkhoi nguuan tinhkhong");
+        if a.generate(input, 16) == b.generate(input, 16) {
+            deterministic += 1;
+        }
+
+        // The recurrent state must remain bounded but must also be able to evolve.
+        if i == 0 {
+            debug_assert_ne!(before, state);
+        }
+    }
+
+    V14StressReport {
+        iterations,
+        bounded_token_passes: bounded,
+        finite_state_passes: finite,
+        noise_passes: noise,
+        deterministic_replay_passes: deterministic,
+        elapsed: start.elapsed(),
+    }
+}
