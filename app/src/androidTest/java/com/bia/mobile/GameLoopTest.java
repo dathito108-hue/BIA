@@ -50,15 +50,17 @@ public final class GameLoopTest extends InstrumentationTestCase {
     }
     void click(String text,long timeout)throws Exception{waitFor(()->clickOnce(text),timeout,"button "+text);}
     boolean clickOnce(String text){
-        for(AccessibilityWindowInfo window:ui.getWindows()){
-            AccessibilityNodeInfo root=window.getRoot();if(root==null)continue;
-            for(AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText(text)){
-                if(node.getText()!=null && node.getText().toString().equals(text) && node.isEnabled()){
-                    AccessibilityNodeInfo p=node;while(p!=null && !p.isClickable())p=p.getParent();
-                    if(p!=null && p.performAction(AccessibilityNodeInfo.ACTION_CLICK))return true;
-                }
-            }
+        for(AccessibilityWindowInfo window:ui.getWindows()) if(clickNode(window.getRoot(),text,0))return true;
+        return false;
+    }
+    boolean clickNode(AccessibilityNodeInfo node,String text,int depth){
+        if(node==null || depth>16)return false;
+        if(node.getText()!=null && node.getText().toString().equalsIgnoreCase(text) && node.isEnabled()){
+            if(!node.isVisibleToUser()){node.performAction(AccessibilityNodeInfo.ACTION_SHOW_ON_SCREEN);return false;}
+            AccessibilityNodeInfo p=node;while(p!=null && !p.isClickable())p=p.getParent();
+            if(p!=null && p.performAction(AccessibilityNodeInfo.ACTION_CLICK))return true;
         }
+        for(int i=0;i<node.getChildCount();i++)if(clickNode(node.getChild(i),text,depth+1))return true;
         return false;
     }
     String dump(){StringBuilder s=new StringBuilder();for(AccessibilityWindowInfo w:ui.getWindows())walk(w.getRoot(),s,0);return s.toString();}

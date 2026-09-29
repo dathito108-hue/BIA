@@ -17,7 +17,7 @@ public final class GameAccessibilityService extends AccessibilityService {
     TextView status;
     View calibration;
     boolean armed,busy;
-    long expires,lastReceipt,issuedAt;
+    long expires,lastReceipt,issuedAt,lastObservedFrame;
     int remaining,generation,gestureSerial,frames,completed,cancelled,maxPointers;
     boolean unresolved;
     final Handler handler=new Handler(Looper.getMainLooper());
@@ -56,11 +56,12 @@ public final class GameAccessibilityService extends AccessibilityService {
         return p;
     }
     void arm(){
+        if(unresolved){message("Kết quả cử chỉ chưa rõ: DỪNG rồi mở phiên mới sau khi kiểm tra.");return;}
         if(capture==null || !capture.profile.calibrated || calibration!=null || busy || unresolved || !targetForeground()){
             message("Chưa bật: cần hiệu chỉnh và mở đúng game.");return;
         }
         if(capture.latest==null || SystemClock.elapsedRealtime()-capture.latest.time>400){message("Chưa có ảnh mới.");return;}
-        armed=true;generation++;issuedAt=SystemClock.elapsedRealtime();expires=issuedAt+300000;remaining=1200;GameNative.reset();message("ĐÃ BẬT — chỉ game đã chọn. DỪNG luôn thu hồi phiên.");
+        armed=true;generation++;issuedAt=SystemClock.elapsedRealtime();expires=issuedAt+300000;remaining=1200;lastObservedFrame=SystemClock.elapsedRealtime();GameNative.reset();message("ĐÃ BẬT — chỉ game đã chọn. DỪNG luôn thu hồi phiên.");
     }
     void pause(String reason){armed=false;generation++;GameNative.reset();message(reason);}
     void message(String text){if(status!=null)status.setText(text+" | ảnh "+frames+" / cử chỉ "+completed+" / hủy "+cancelled);}
@@ -72,6 +73,8 @@ public final class GameAccessibilityService extends AccessibilityService {
     }
     void onFrame(GameCaptureService.Frame frame){
         if(capture==null || frame==null)return;frames++;
+        if(armed && lastObservedFrame>0 && frame.time-lastObservedFrame>800){pause("Luồng ảnh bị gián đoạn; cần bật lại");return;}
+        lastObservedFrame=frame.time;
         if(!armed || busy)return;
         long now=SystemClock.elapsedRealtime();
         DisplayMetrics metrics=new DisplayMetrics();wm.getDefaultDisplay().getRealMetrics(metrics);
