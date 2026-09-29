@@ -161,3 +161,18 @@ V12 extends the recurrent Duyên-token path in two measurable directions:
 - **CI benchmark:** release CI still protects against accidental complexity growth on x86_64.
 
 The Android benchmark is the authoritative device-specific speed measurement. CI throughput must not be presented as phone throughput.
+
+
+## Inference V14 — Stress / Robustness Proof
+
+V14 adds stronger evidence for the bounded recurrent decoder:
+
+- 5,000–50,000 iteration stress evaluation.
+- Unicode, punctuation/noise and very long-input survival.
+- Full learned-vocabulary pressure at the 128-token cap.
+- Deterministic replay checks on every stress iteration.
+- Token-count and recurrent-state boundedness checks.
+- Release CI stress benchmark.
+- Android `/stress` command runs 10,000 iterations natively on the actual device and reports pass/fail plus timing.
+
+This proves robustness only for the explicit invariants and stress corpus above. It is not a claim of open-domain intelligence quality.
