@@ -1,15 +1,17 @@
-use crate::capability::{DeviceAction, DeviceActionKind};
 use crate::action::Authority;
+use crate::capability::{DeviceAction, DeviceActionKind};
 use crate::goals::{Goal, GoalStatus};
+use crate::knowledge::{decode_record, encode_record, KnowledgeRecord};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContinuityState {
     pub active_goal: Option<Goal>,
     pub queued_actions: Vec<DeviceAction>,
+    pub knowledge: Vec<KnowledgeRecord>,
 }
 
 pub fn encode_continuity(state: &ContinuityState) -> String {
-    let mut lines = vec!["BIACONT1".to_string()];
+    let mut lines = vec!["BIACONT2".to_string()];
     if let Some(goal) = &state.active_goal {
         lines.push(format!(
             "G\t{}\t{}\t{}\t{}",
@@ -29,17 +31,32 @@ pub fn encode_continuity(state: &ContinuityState) -> String {
             escape(&a.payload)
         ));
     }
+    for record in &state.knowledge {
+        lines.push(format!("K\t{}", encode_record(record)));
+    }
     lines.join("\n")
 }
 
 pub fn decode_continuity(text: &str) -> Option<ContinuityState> {
     let mut lines = text.lines();
-    if lines.next()? != "BIACONT1" {
+    let version = lines.next()?;
+    if version != "BIACONT1" && version != "BIACONT2" {
         return None;
     }
     let mut goal = None;
     let mut actions = Vec::new();
+    let mut knowledge = Vec::new();
+
     for line in lines {
+        if let Some(rest) = line.strip_prefix("K\t") {
+            if version == "BIACONT2" {
+                if let Some(record) = decode_record(rest) {
+                    knowledge.push(record);
+                }
+            }
+            continue;
+        }
+
         let parts: Vec<&str> = line.split('\t').collect();
         match parts.first().copied() {
             Some("G") if parts.len() >= 5 => {
@@ -67,9 +84,11 @@ pub fn decode_continuity(text: &str) -> Option<ContinuityState> {
             _ => {}
         }
     }
+
     Some(ContinuityState {
         active_goal: goal,
         queued_actions: actions,
+        knowledge,
     })
 }
 
