@@ -1,4 +1,5 @@
 use crate::budget::{middle_way, Budget, DeviceState};
+use crate::four_matrix::{AggregateVector, FourMatrixKernel, FourMatrixOutput, RealmBand};
 use crate::meaning::MeaningFormation;
 use crate::inference_matrix::{f32_to_q15, MatrixDecision, MatrixSignal, TamThienMatrix};
 use crate::memory::SeedMemory;
@@ -36,6 +37,7 @@ pub struct BiaDca {
     cycle: u64,
     previous_observation: Option<Phenomenon>,
     matrix: TamThienMatrix,
+    four_matrix: FourMatrixKernel,
 }
 
 impl BiaDca {
@@ -48,6 +50,7 @@ impl BiaDca {
             cycle: 0,
             previous_observation: None,
             matrix: TamThienMatrix::default(),
+            four_matrix: FourMatrixKernel::default(),
         }
     }
 
@@ -60,6 +63,7 @@ impl BiaDca {
             cycle: 0,
             previous_observation: None,
             matrix: TamThienMatrix::default(),
+            four_matrix: FourMatrixKernel::default(),
         }
     }
 
@@ -102,7 +106,8 @@ impl BiaDca {
             .world
             .causes_for(focus.id, self.active_causes.min(budget.world_limit));
         let memories = self.memory.recall(&focus, budget.memory_limit);
-        let matrix = self.matrix_decision(&focus, &causes, &memories);
+        let four = self.four_matrix_decision(&focus);
+        let matrix = self.matrix_decision(&focus, &causes, &memories, Some(&four));
 
         let mut recognition: Vec<u32> = vec![emergent_concept];
         for p in &active {
@@ -164,8 +169,33 @@ impl BiaDca {
         }
     }
 
-    pub fn fast_matrix(&self, focus: &Phenomenon) -> MatrixDecision {
-        self.matrix_decision(focus, &[], &[])
+    pub fn fast_matrix(&mut self, focus: &Phenomenon) -> MatrixDecision {
+        let four = self.four_matrix_decision(focus);
+        self.matrix_decision(focus, &[], &[], Some(&four))
+    }
+
+    pub fn four_matrix_decision(&mut self, focus: &Phenomenon) -> FourMatrixOutput {
+        let mut energy = 0.0f32;
+        for value in focus.features.iter().take(8) {
+            energy += value.abs().min(1.0);
+        }
+        energy = (energy / focus.features.len().clamp(1, 8) as f32).clamp(0.0, 1.0);
+
+        let aggregates = AggregateVector {
+            rupa: f32_to_q15(energy),
+            vedana: f32_to_q15(focus.salience),
+            sanna: f32_to_q15(focus.confidence),
+            sankhara: f32_to_q15((energy * focus.salience).clamp(0.0, 1.0)),
+            vinnana: f32_to_q15((0.5 * focus.confidence + 0.5 * focus.salience).clamp(0.0, 1.0)),
+        };
+
+        let realm = match focus.gate {
+            crate::types::SenseGate::Mind => RealmBand::Abstract,
+            crate::types::SenseGate::System => RealmBand::Mixed,
+            _ => RealmBand::Embodied,
+        };
+
+        self.four_matrix.process(aggregates, realm)
     }
 
     fn matrix_decision(
@@ -173,6 +203,7 @@ impl BiaDca {
         focus: &Phenomenon,
         causes: &[Relation],
         memories: &[crate::memory::Seed],
+        four: Option<&FourMatrixOutput>,
     ) -> MatrixDecision {
         let mut signals = Vec::with_capacity(32);
         for (i, value) in focus.features.iter().take(16).enumerate() {
@@ -189,6 +220,25 @@ impl BiaDca {
             lane: 13,
             value_q15: f32_to_q15(focus.confidence),
         });
+
+        if let Some(four) = four {
+            for (i, value) in four.conditioned.as_array().iter().enumerate() {
+                signals.push(MatrixSignal {
+                    lane: i as u8,
+                    value_q15: *value,
+                });
+            }
+            for (lane, value) in [
+                (8u8, four.projected.technical),
+                (9u8, four.projected.affective),
+                (10u8, four.projected.global),
+            ] {
+                signals.push(MatrixSignal {
+                    lane,
+                    value_q15: value,
+                });
+            }
+        }
         for cause in causes.iter().take(8) {
             signals.push(MatrixSignal {
                 lane: ((cause.from ^ cause.to) & 15) as u8,
