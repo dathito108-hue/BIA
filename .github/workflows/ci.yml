@@ -28,3 +28,4 @@ jobs:
       - run: cargo run --release --example v37_deliberation
       - run: cargo run --release --example v45_max_intelligence
       - run: cargo run --release --example v61_learned_semantic
+      - run: cargo run --release --example v81_continual_generative

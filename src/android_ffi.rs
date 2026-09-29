@@ -493,6 +493,36 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeLearnedSemanticV61
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeContinualV81(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let report = crate::run_v81_continual_generative_evaluation();
+    java_string(
+        &mut env,
+        format!(
+            "V81 continual: pass={}, cases={}, continual={}/{}, anchor={}/{}, composition={}/{}, symbol={}/{}, consolidation={}/{}, generation={}/{}, accuracy={:.3}, elapsed_us={}",
+            report.passed(),
+            report.cases,
+            report.continual_passes,
+            report.cases,
+            report.anchor_passes,
+            report.cases,
+            report.composition_passes,
+            report.cases,
+            report.symbol_passes,
+            report.cases,
+            report.consolidation_passes,
+            report.cases,
+            report.generation_passes,
+            report.cases,
+            report.accuracy(),
+            report.elapsed.as_micros()
+        ),
+    )
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
