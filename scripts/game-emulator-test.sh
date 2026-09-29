@@ -8,6 +8,7 @@ adb logcat -c
 adb shell am instrument -w -r com.bia.mobile.test/android.test.InstrumentationTestRunner | tee game-evidence/instrumentation.txt
 adb logcat -d > game-evidence/logcat.txt
 adb pull /sdcard/Android/data/com.bia.mobile/files/game-proof.png game-evidence/game-proof.png || true
+adb pull /sdcard/Android/data/com.bia.mobile/files/game-fps-proof.png game-evidence/game-fps-proof.png || true
 python3 - <<'PY'
 from pathlib import Path
 s=Path('game-evidence/instrumentation.txt').read_text()

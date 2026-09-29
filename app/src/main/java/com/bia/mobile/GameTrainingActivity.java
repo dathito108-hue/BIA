@@ -24,11 +24,11 @@ public final class GameTrainingActivity extends Activity {
         final HashMap<Integer,PointF> previous=new HashMap<>();
         Arena(Context c){super(c);setContentDescription("BIA sân tập: mục tiêu đỏ, cần trái, đánh và kỹ năng bên phải");}
         @Override protected void onDraw(Canvas c){
-            c.drawColor(Color.rgb(12,22,30));paint.setColor(Color.WHITE);paint.setTextSize(24);
-            c.drawText("SÂN TẬP BIA — trúng "+hits+" | chạm đồng thời "+maxPointers,15,getHeight()*.15f,paint);
+            c.drawColor(Color.rgb(12,22,30));paint.setColor(Color.WHITE);paint.setTextSize(getWidth()/32f);
+            c.drawText("TRÚNG "+hits+" | ĐA CHẠM "+maxPointers,15,getHeight()*.30f,paint);
             circle(c,enemyX,enemyY,.024f,0xffff3030);circle(c,.5f,.5f,.009f,Color.WHITE);
             circle(c,.14f,.79f,.055f,0xff507080);circle(c,.88f,.8f,.04f,0xff40b0a0);circle(c,.74f,.8f,.035f,0xff8070d0);
-            paint.setTextSize(18);paint.setColor(Color.WHITE);c.drawText("DI CHUYỂN",getWidth()*.06f,getHeight()*.91f,paint);c.drawText("CHIÊU      ĐÁNH",getWidth()*.69f,getHeight()*.91f,paint);
+            paint.setTextSize(getWidth()/45f);paint.setColor(Color.WHITE);c.drawText("DI CHUYỂN",getWidth()*.06f,getHeight()*.91f,paint);c.drawText("CHIÊU      ĐÁNH",getWidth()*.69f,getHeight()*.91f,paint);
             c.drawText("Nhịp ảnh "+(android.os.SystemClock.elapsedRealtime()/100),15,getHeight()*.98f,paint);
             postInvalidateDelayed(80);
         }

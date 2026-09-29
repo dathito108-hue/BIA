@@ -24,7 +24,7 @@ public final class GameCaptureService extends Service {
     final Handler main=new Handler(Looper.getMainLooper());
     final AtomicBoolean queued=new AtomicBoolean();
     long lastFrame;
-    boolean closed;
+    volatile boolean closed;
     static final class Frame {
         final int[] pixels;final int width,height;final long time;
         Frame(int[] p,int w,int h,long t){pixels=p;width=w;height=h;time=t;}
@@ -71,6 +71,7 @@ public final class GameCaptureService extends Service {
                         int n=y*stride+x*pixel;
                         colors[y*w+x]=0xff000000|((buffer.get(n)&255)<<16)|((buffer.get(n+1)&255)<<8)|(buffer.get(n+2)&255);
                     }
+                    if(closed)return;
                     latest=new Frame(colors,w,h,now);
                     if(queued.compareAndSet(false,true))main.post(()->{
                         queued.set(false);
@@ -86,9 +87,24 @@ public final class GameCaptureService extends Service {
     }
     @Override public void onDestroy(){
         closed=true;
-        if(instance==this)instance=null;
         if(GameAccessibilityService.instance!=null)GameAccessibilityService.instance.endSession();
-        if(display!=null)display.release();if(reader!=null)reader.close();if(projection!=null)projection.stop();if(worker!=null)worker.quitSafely();
-        latest=null;stopForeground(true);super.onDestroy();
+        final ImageReader ownedReader=reader;final VirtualDisplay ownedDisplay=display;
+        final MediaProjection ownedProjection=projection;final HandlerThread ownedWorker=worker;
+        reader=null;display=null;projection=null;worker=null;latest=null;
+        // ImageReader.close unmaps acquired buffers: serialize it after the current copy.
+        Runnable release=()->{
+            try {
+                if(ownedReader!=null)ownedReader.setOnImageAvailableListener(null,null);
+                if(ownedDisplay!=null)ownedDisplay.release();
+                if(ownedReader!=null)ownedReader.close();
+            }catch(Exception e){android.util.Log.e("BIA_GAME","Capture cleanup failed",e);}
+            finally {
+                if(ownedProjection!=null)ownedProjection.stop();
+                if(ownedWorker!=null)ownedWorker.quitSafely();
+                main.post(()->{if(instance==this)instance=null;});
+            }
+        };
+        if(ownedWorker!=null)new Handler(ownedWorker.getLooper()).post(release);else release.run();
+        stopForeground(true);super.onDestroy();
     }
 }

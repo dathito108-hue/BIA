@@ -22,7 +22,10 @@ emulator. It enables the service only inside that disposable test device, launch
 the built-in arena, accepts the test's MediaProjection dialog, starts a five-minute
 scope, and requires actual received multi-pointer MotionEvents plus arena hits.
 It then leaves the target, requires the loop to pause, presses Stop, and requires
-the capture service to end. Test output, logcat and a screenshot are retained as
+the capture service to end. A fresh FPS session must aim and fire successfully;
+returning to portrait MainActivity must close capture without crashing. Capture
+cleanup is serialized on the image worker so ImageReader cannot unmap a buffer
+while another thread is reading it. Test output, logcat and a screenshot are retained as
 `BIA-Game-evidence`; only passing output is evidence of this path working.
 
 ```sh

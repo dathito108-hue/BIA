@@ -15,14 +15,37 @@ public final class GameLoopTest extends InstrumentationTestCase {
         ui=getInstrumentation().getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);
         android.accessibilityservice.AccessibilityServiceInfo info=ui.getServiceInfo();
         info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;ui.setServiceInfo(info);
+        GameAccessibilityService moba=startSession(true);
+        waitFor(()->GameTrainingActivity.hits>=3 && GameTrainingActivity.maxPointers>=2,15000,"MOBA hits and delivered multitouch");
+        assertTrue("native MOBA decisions dispatched",moba.completed>=1);
+        record("MOBA",moba,"game-proof.png");
+        // Leave the arena without rotating, then exercise the actual Stop button.
+        getInstrumentation().getTargetContext().startActivity(new Intent(getInstrumentation().getTargetContext(),GameSetupActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        waitFor(()->!moba.armed,5000,"pause outside arena");Thread.sleep(200);int stopped=moba.completed;Thread.sleep(600);
+        assertEquals("no gestures after leaving target",stopped,moba.completed);
+        click("DỪNG",5000);waitFor(()->GameCaptureService.instance==null,5000,"explicit session stop and buffer cleanup");
+        assertFalse("permission not armed after stop",moba.armed);
+
+        GameAccessibilityService fps=startSession(false);
+        waitFor(()->GameTrainingActivity.hits>=3,20000,"FPS aim followed by firing");
+        assertTrue("FPS aimed before firing",fps.completed>=3);
+        record("FPS",fps,"game-fps-proof.png");
+        // Portrait MainActivity changes capture geometry: regression for buffer-close crash.
+        getInstrumentation().getTargetContext().startActivity(new Intent(getInstrumentation().getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        waitFor(()->GameCaptureService.instance==null,7000,"rotation closes projection without crashing");
+        assertFalse("rotation revokes the game scope",fps.armed);
+    }
+    GameAccessibilityService startSession(boolean moba)throws Exception {
         Intent setup=new Intent(getInstrumentation().getTargetContext(),GameSetupActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         GameSetupActivity activity=(GameSetupActivity)getInstrumentation().startActivitySync(setup);
-        // am instrument force-stops the target process; bind only after that restart.
-        shell("settings delete secure enabled_accessibility_services");
-        shell("settings put secure enabled_accessibility_services com.bia.mobile/.GameAccessibilityService");
-        shell("settings put secure accessibility_enabled 1");
-        waitFor(()->GameAccessibilityService.instance!=null,20000,"accessibility service");
-        getInstrumentation().runOnMainSync(()->activity.modes.setSelection(1));
+        if(GameAccessibilityService.instance==null){
+            // am instrument force-stops the target process; bind after its restart.
+            shell("settings delete secure enabled_accessibility_services");
+            shell("settings put secure enabled_accessibility_services com.bia.mobile/.GameAccessibilityService");
+            shell("settings put secure accessibility_enabled 1");
+            waitFor(()->GameAccessibilityService.instance!=null,20000,"accessibility service");
+        }
+        getInstrumentation().runOnMainSync(()->activity.modes.setSelection(moba?1:0));
         click("2. Đồng ý đọc màn hình và mở game",5000);
         long end=SystemClock.elapsedRealtime()+15000;
         while(SystemClock.elapsedRealtime()<end && GameCaptureService.instance==null){
@@ -35,22 +58,16 @@ public final class GameLoopTest extends InstrumentationTestCase {
             Thread.sleep(150);
         }
         waitFor(()->GameCaptureService.instance!=null && GameCaptureService.instance.latest!=null && GameTrainingActivity.visible,10000,"projection frames in arena");
-        // First immersive launch presents an Android-owned tutorial window.
-        clickOnce("Got it");
         waitFor(()->{clickOnce("Got it");return GameAccessibilityService.instance.targetForeground();},10000,"arena is the active window");
+        Thread.sleep(350); // Flush the tutorial/window transition before a new grant.
         waitFor(()->GameCaptureService.instance.latest!=null && SystemClock.elapsedRealtime()-GameCaptureService.instance.latest.time<350,5000,"fresh arena frame");
         click("Bật 5 phút",5000);
-        waitFor(()->GameTrainingActivity.hits>=3 && GameTrainingActivity.maxPointers>=2,15000,"arena hits and delivered multitouch");
-        GameAccessibilityService service=GameAccessibilityService.instance;
-        assertTrue("native decisions dispatched",service.completed>=1);
-        assertTrue("multi-pointer MotionEvent arrived",GameTrainingActivity.maxPointers>=2);
-        System.out.println("BIA_GAME_EVIDENCE frames="+service.frames+" completed="+service.completed+" arenaHits="+GameTrainingActivity.hits+" actualMaxPointers="+GameTrainingActivity.maxPointers);
-        Bitmap shot=ui.takeScreenshot();if(shot!=null){try(FileOutputStream out=new FileOutputStream(getInstrumentation().getTargetContext().getExternalFilesDir(null)+"/game-proof.png")){shot.compress(Bitmap.CompressFormat.PNG,100,out);}shot.recycle();}
-        getInstrumentation().getTargetContext().startActivity(new Intent(getInstrumentation().getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-        waitFor(()->!service.armed,5000,"pause outside arena");Thread.sleep(200);int stopped=service.completed;Thread.sleep(600);
-        assertEquals("no gestures after leaving target",stopped,service.completed);
-        click("DỪNG",5000);waitFor(()->GameCaptureService.instance==null,5000,"session stop");
-        assertFalse("permission not armed after stop",service.armed);
+        return GameAccessibilityService.instance;
+    }
+    void record(String mode,GameAccessibilityService service,String name)throws Exception {
+        System.out.println("BIA_GAME_EVIDENCE mode="+mode+" frames="+service.frames+" completed="+service.completed+" arenaHits="+GameTrainingActivity.hits+" actualMaxPointers="+GameTrainingActivity.maxPointers);
+        Bitmap shot=ui.takeScreenshot();
+        if(shot!=null){try(FileOutputStream out=new FileOutputStream(getInstrumentation().getTargetContext().getExternalFilesDir(null)+"/"+name)){shot.compress(Bitmap.CompressFormat.PNG,100,out);}shot.recycle();}
     }
     void shell(String command)throws Exception {
         try(java.io.InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(ui.executeShellCommand(command))){
