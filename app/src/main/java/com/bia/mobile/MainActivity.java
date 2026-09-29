@@ -3,6 +3,7 @@ package com.bia.mobile;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.AlertDialog;
+import android.app.BatteryManager;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
@@ -11,9 +12,13 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.provider.Settings;
+import android.speech.RecognizerIntent;
+import android.speech.tts.TextToSpeech;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -26,10 +31,16 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Locale;
 
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements TextToSpeech.OnInitListener {
+    private static final int REQ_SPEECH = 97;
+
     static {
         System.loadLibrary("bia_core");
     }
@@ -49,6 +60,8 @@ public class MainActivity extends Activity {
     public static native boolean nativeLoad(String path);
     public static native String nativePendingAction();
     public static native void nativeResolveAction(boolean success, long timestamp);
+    public static native String nativeExportContinuity();
+    public static native boolean nativeImportContinuity(String state);
 
     private static final int BG = Color.rgb(12, 18, 16);
     private static final int SURFACE = Color.rgb(24, 34, 30);
@@ -63,6 +76,11 @@ public class MainActivity extends Activity {
     private EditText input;
     private TextView status;
     private String memoryPath;
+    private String continuityPath;
+    private TextToSpeech tts;
+    private boolean ttsReady;
+    private boolean voiceTurn;
+    private String lastReply = "";
 
     @Override
     protected void onCreate(Bundle state) {
@@ -73,7 +91,12 @@ public class MainActivity extends Activity {
         window.setNavigationBarColor(BG);
 
         memoryPath = new File(getFilesDir(), "bia_dharma_memory.bin").getAbsolutePath();
-        boolean restored = nativeLoad(memoryPath);
+        continuityPath = new File(getFilesDir(), "bia_runtime_continuity.txt").getAbsolutePath();
+
+        boolean restoredMemory = nativeLoad(memoryPath);
+        boolean restoredRuntime = loadContinuity();
+
+        tts = new TextToSpeech(this, this);
 
         LinearLayout root = column();
         root.setBackgroundColor(BG);
@@ -96,33 +119,56 @@ public class MainActivity extends Activity {
                 );
         root.addView(scroll, scrollParams);
 
-        addBubble(
-                restored
-                        ? "Tôi đã khôi phục ký ức từ lần sử dụng trước."
-                        : "Tôi đang hoạt động cục bộ trên thiết bị. Hãy cho tôi một Cảnh để bắt đầu.",
-                false
-        );
+        if (restoredMemory || restoredRuntime) {
+            addBubble(
+                    "Tôi đã nối lại ký ức và trạng thái công việc từ lần sử dụng trước.",
+                    false
+            );
+        } else {
+            addBubble(
+                    "Tôi đang hoạt động cục bộ trên thiết bị. Hãy cho tôi một Cảnh hoặc mục tiêu để bắt đầu.",
+                    false
+            );
+        }
 
         addBubble(
-                "Bạn có thể thử: “Nhớ rằng…”, “Mục tiêu: …”, “Tìm web …”, “Mở YouTube”, “Mở cài đặt”, hoặc “Sao chép …”.",
+                "Voice đã sẵn sàng qua nút Mic. BIA có thể giữ mục tiêu, tiếp tục hàng đợi hành động và cảm nhận pin/nhiệt thiết bị khi Quán.",
                 false
         );
 
         root.addView(buildComposer());
         setContentView(root);
         refreshStatus();
+
+        if (restoredRuntime && !nativePendingAction().isEmpty()) {
+            addBubble("Có một hành động đang chờ từ phiên trước.", false);
+            handlePendingAction();
+        }
     }
 
     @Override
     protected void onPause() {
-        nativeSave(memoryPath);
+        persistAll();
         super.onPause();
     }
 
     @Override
     protected void onDestroy() {
-        nativeSave(memoryPath);
+        persistAll();
+        if (tts != null) {
+            tts.stop();
+            tts.shutdown();
+        }
         super.onDestroy();
+    }
+
+    @Override
+    public void onInit(int statusCode) {
+        if (statusCode == TextToSpeech.SUCCESS) {
+            int result = tts.setLanguage(new Locale("vi", "VN"));
+            ttsReady = result != TextToSpeech.LANG_MISSING_DATA
+                    && result != TextToSpeech.LANG_NOT_SUPPORTED;
+        }
     }
 
     private View buildHeader() {
@@ -135,15 +181,13 @@ public class MainActivity extends Activity {
         markBg.setStroke(dp(1), GOLD);
         mark.setBackground(markBg);
         mark.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams markParams =
-                new LinearLayout.LayoutParams(dp(54), dp(54));
-        header.addView(mark, markParams);
+        header.addView(mark, new LinearLayout.LayoutParams(dp(54), dp(54)));
 
         LinearLayout labels = column();
         labels.setPadding(dp(14), 0, 0, 0);
         labels.addView(text("BIA", 24, TEXT, Typeface.BOLD));
         labels.addView(text(
-                "Trí tuệ Duyên khởi • Capability V3",
+                "Trí tuệ Duyên khởi • Voice + Continuity V5",
                 13,
                 MUTED,
                 Typeface.NORMAL
@@ -191,20 +235,24 @@ public class MainActivity extends Activity {
                 )
         );
 
-        card.addView(text("TĨNH → QUÁN → HÀNH", 11, GOLD, Typeface.BOLD));
+        card.addView(text("CẢNH → QUÁN → HÀNH", 11, GOLD, Typeface.BOLD));
         return card;
     }
 
     private View buildComposer() {
         LinearLayout composer = row();
-        composer.setGravity(Gravity.BOTTOM);
+        composer.setGravity(Gravity.BOTTOM | Gravity.CENTER_VERTICAL);
         composer.setPadding(0, dp(10), 0, 0);
+
+        Button mic = compactButton("Mic");
+        mic.setOnClickListener(v -> startVoiceRecognition());
+        composer.addView(mic, new LinearLayout.LayoutParams(dp(58), dp(52)));
 
         input = new EditText(this);
         input.setTextColor(TEXT);
         input.setHintTextColor(Color.rgb(111, 128, 120));
         input.setTextSize(16f);
-        input.setHint("Nói điều bạn muốn BIA hiểu hoặc làm...");
+        input.setHint("Nói hoặc nhập điều BIA cần hiểu/làm...");
         input.setMinLines(1);
         input.setMaxLines(4);
         input.setPadding(dp(16), dp(12), dp(16), dp(12));
@@ -216,8 +264,12 @@ public class MainActivity extends Activity {
                         ViewGroup.LayoutParams.WRAP_CONTENT,
                         1f
                 );
-        inputParams.setMargins(0, 0, dp(10), 0);
+        inputParams.setMargins(dp(8), 0, dp(8), 0);
         composer.addView(input, inputParams);
+
+        Button speak = compactButton("Đọc");
+        speak.setOnClickListener(v -> speakLastReply());
+        composer.addView(speak, new LinearLayout.LayoutParams(dp(58), dp(52)));
 
         Button send = new Button(this);
         send.setText("Quán");
@@ -225,18 +277,57 @@ public class MainActivity extends Activity {
         send.setTextSize(14f);
         send.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         send.setAllCaps(false);
-        send.setPadding(dp(16), dp(10), dp(16), dp(10));
         send.setBackground(rounded(GOLD, dp(20)));
         send.setOnClickListener(v -> submit());
-        composer.addView(
-                send,
-                new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT,
-                        dp(52)
-                )
-        );
+        LinearLayout.LayoutParams sendParams =
+                new LinearLayout.LayoutParams(dp(72), dp(52));
+        sendParams.setMargins(dp(8), 0, 0, 0);
+        composer.addView(send, sendParams);
 
         return composer;
+    }
+
+    private Button compactButton(String label) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setTextColor(TEXT);
+        button.setTextSize(12f);
+        button.setAllCaps(false);
+        button.setBackground(rounded(SURFACE_2, dp(18)));
+        return button;
+    }
+
+    private void startVoiceRecognition() {
+        try {
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+            );
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "vi-VN");
+            intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Nói với BIA");
+            startActivityForResult(intent, REQ_SPEECH);
+        } catch (Exception e) {
+            Toast.makeText(
+                    this,
+                    "Thiết bị chưa có dịch vụ nhận dạng giọng nói.",
+                    Toast.LENGTH_SHORT
+            ).show();
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQ_SPEECH && resultCode == RESULT_OK && data != null) {
+            ArrayList<String> results =
+                    data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+            if (results != null && !results.isEmpty()) {
+                input.setText(results.get(0));
+                voiceTurn = true;
+                submit();
+            }
+        }
     }
 
     private void submit() {
@@ -252,20 +343,47 @@ public class MainActivity extends Activity {
         int memoryMb =
                 (int) Math.max(64L, mi.availMem / (1024L * 1024L));
 
-        long now = SystemClock.elapsedRealtime();
+        float battery = readBattery();
+        float thermal = readThermal();
+        float load = mi.lowMemory ? 0.90f : 0.25f;
+
         String reply = nativeChat(
                 text,
-                now,
-                0.75f,
-                0.20f,
-                0.20f,
+                SystemClock.elapsedRealtime(),
+                battery,
+                thermal,
+                load,
                 memoryMb
         );
 
+        lastReply = reply;
         addBubble(reply, false);
+
+        if (voiceTurn) {
+            voiceTurn = false;
+            speak(reply);
+        }
+
         handlePendingAction();
-        nativeSave(memoryPath);
+        persistAll();
         refreshStatus();
+    }
+
+    private float readBattery() {
+        BatteryManager battery =
+                (BatteryManager) getSystemService(BATTERY_SERVICE);
+        int percent = battery.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+        if (percent < 0 || percent > 100) return 0.5f;
+        return percent / 100f;
+    }
+
+    private float readThermal() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return 0.2f;
+        }
+        PowerManager power = (PowerManager) getSystemService(POWER_SERVICE);
+        int value = power.getCurrentThermalStatus();
+        return Math.min(1f, Math.max(0f, value / 6f));
     }
 
     private void handlePendingAction() {
@@ -280,25 +398,30 @@ public class MainActivity extends Activity {
         String payload = unescape(parts[2]);
 
         new AlertDialog.Builder(this)
-                .setTitle("BIA đề xuất hành động")
-                .setMessage(label + "\n\nChỉ thực thi khi bạn xác nhận.")
-                .setNegativeButton("Hủy", (dialog, which) -> {
+                .setTitle("BIA đề xuất bước kế tiếp")
+                .setMessage(
+                        label
+                                + "\n\nMỗi bước trong hàng đợi đều cần bạn xác nhận riêng."
+                )
+                .setNegativeButton("Dừng", (dialog, which) -> {
                     nativeResolveAction(false, SystemClock.elapsedRealtime());
-                    addBubble("Hành động đã được hủy. Tôi đã ghi nhận kết quả này.", false);
-                    nativeSave(memoryPath);
+                    lastReply = "Chuỗi hành động đã dừng. Tôi đã ghi nhận kết quả.";
+                    addBubble(lastReply, false);
+                    persistAll();
                     refreshStatus();
                 })
                 .setPositiveButton("Thực thi", (dialog, which) -> {
                     boolean success = executeAction(kind, payload);
                     nativeResolveAction(success, SystemClock.elapsedRealtime());
-                    addBubble(
-                            success
-                                    ? "Hành động đã được thực thi và kết quả đã được huân tập."
-                                    : "Hành động không thực hiện được; tôi đã ghi nhận thất bại để điều chỉnh.",
-                            false
-                    );
-                    nativeSave(memoryPath);
+                    lastReply = success
+                            ? "Bước đã hoàn thành và kết quả đã được huân tập."
+                            : "Bước thất bại; tôi đã ghi nhận để điều chỉnh.";
+                    addBubble(lastReply, false);
+                    persistAll();
                     refreshStatus();
+                    if (success && !nativePendingAction().isEmpty()) {
+                        handlePendingAction();
+                    }
                 })
                 .show();
     }
@@ -309,40 +432,98 @@ public class MainActivity extends Activity {
                 case "OPEN_SETTINGS":
                     startActivity(new Intent(Settings.ACTION_SETTINGS));
                     return true;
-
                 case "OPEN_URL":
                     startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(payload)));
                     return true;
-
                 case "SEARCH_WEB":
-                    String query = URLEncoder.encode(payload, StandardCharsets.UTF_8.name());
+                    String query = URLEncoder.encode(
+                            payload,
+                            StandardCharsets.UTF_8.name()
+                    );
                     startActivity(new Intent(
                             Intent.ACTION_VIEW,
                             Uri.parse("https://www.google.com/search?q=" + query)
                     ));
                     return true;
-
                 case "LAUNCH_PACKAGE":
-                    Intent launch = getPackageManager().getLaunchIntentForPackage(payload);
+                    Intent launch =
+                            getPackageManager().getLaunchIntentForPackage(payload);
                     if (launch == null) {
-                        Toast.makeText(this, "Không tìm thấy ứng dụng: " + payload, Toast.LENGTH_SHORT).show();
+                        Toast.makeText(
+                                this,
+                                "Không tìm thấy ứng dụng: " + payload,
+                                Toast.LENGTH_SHORT
+                        ).show();
                         return false;
                     }
                     startActivity(launch);
                     return true;
-
                 case "CLIPBOARD_WRITE":
                     ClipboardManager clipboard =
-                            (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                    clipboard.setPrimaryClip(ClipData.newPlainText("BIA", payload));
+                            (ClipboardManager) getSystemService(
+                                    Context.CLIPBOARD_SERVICE
+                            );
+                    clipboard.setPrimaryClip(
+                            ClipData.newPlainText("BIA", payload)
+                    );
                     return true;
-
                 default:
                     return false;
             }
         } catch (Exception e) {
-            Toast.makeText(this, "Không thể thực thi hành động.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(
+                    this,
+                    "Không thể thực thi hành động.",
+                    Toast.LENGTH_SHORT
+            ).show();
             return false;
+        }
+    }
+
+    private void speakLastReply() {
+        if (lastReply == null || lastReply.isEmpty()) {
+            Toast.makeText(this, "Chưa có phản hồi để đọc.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        speak(lastReply);
+    }
+
+    private void speak(String value) {
+        if (!ttsReady || tts == null) {
+            Toast.makeText(
+                    this,
+                    "Dịch vụ đọc tiếng Việt chưa sẵn sàng.",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+        tts.speak(value, TextToSpeech.QUEUE_FLUSH, null, "bia-reply");
+    }
+
+    private void persistAll() {
+        nativeSave(memoryPath);
+        saveContinuity(nativeExportContinuity());
+    }
+
+    private boolean loadContinuity() {
+        File file = new File(continuityPath);
+        if (!file.exists()) return false;
+        try (FileInputStream in = new FileInputStream(file)) {
+            byte[] bytes = new byte[(int) Math.min(file.length(), 1024 * 1024)];
+            int n = in.read(bytes);
+            if (n <= 0) return false;
+            String state = new String(bytes, 0, n, StandardCharsets.UTF_8);
+            return nativeImportContinuity(state);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void saveContinuity(String state) {
+        try (FileOutputStream out = new FileOutputStream(continuityPath, false)) {
+            out.write(state.getBytes(StandardCharsets.UTF_8));
+            out.flush();
+        } catch (Exception ignored) {
         }
     }
 
@@ -355,7 +536,15 @@ public class MainActivity extends Activity {
 
     private void refreshStatus() {
         if (status != null) {
-            status.setText(nativeStatus());
+            status.setText(
+                    nativeStatus()
+                            + String.format(
+                                    Locale.US,
+                                    "  •  Pin %.0f%%  •  Nhiệt %.0f%%",
+                                    readBattery() * 100f,
+                                    readThermal() * 100f
+                            )
+            );
         }
     }
 
