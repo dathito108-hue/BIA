@@ -1,3 +1,4 @@
+use crate::four_matrix::{classify_realm, encode_text_aggregates, FourMatrixKernel};
 use crate::inference_matrix::{f32_to_q15, MatrixDecision, MatrixSignal, TamThienMatrix};
 use crate::types::CognitiveMoment;
 
@@ -11,6 +12,7 @@ pub struct InstantToken {
 #[derive(Clone, Debug, Default)]
 pub struct InstantTokenEmitter {
     matrix: TamThienMatrix,
+    four: FourMatrixKernel,
 }
 
 impl InstantTokenEmitter {
@@ -32,8 +34,9 @@ impl InstantTokenEmitter {
             .collect()
     }
 
-    pub fn decide(&self, input: &str, moment: Option<&CognitiveMoment>) -> MatrixDecision {
+    pub fn decide(&mut self, input: &str, moment: Option<&CognitiveMoment>) -> MatrixDecision {
         let mut signals = self.signals_from_text(input);
+        self.extend_four_matrix_signals(input, &mut signals);
         if let Some(m) = moment {
             // Reserve semantic lanes for uncertainty, feeling and hypothesis support.
             signals.push(MatrixSignal {
@@ -54,8 +57,9 @@ impl InstantTokenEmitter {
 
     /// Emits a useful first word without waiting for full contemplation when
     /// TieuThien has a decisive margin. This is a word-token stream, not an LLM.
-    pub fn emit_immediate(&self, input: &str) -> Vec<InstantToken> {
-        let signals = self.signals_from_text(input);
+    pub fn emit_immediate(&mut self, input: &str) -> Vec<InstantToken> {
+        let mut signals = self.signals_from_text(input);
+        self.extend_four_matrix_signals(input, &mut signals);
         if let Some((lane, _)) = self.matrix.infer_early(&signals) {
             return vec![InstantToken {
                 text: early_word(lane, input).to_string(),
@@ -67,7 +71,7 @@ impl InstantTokenEmitter {
     }
 
     pub fn emit_response(
-        &self,
+        &mut self,
         input: &str,
         moment: &CognitiveMoment,
         response: &str,
@@ -95,6 +99,43 @@ impl InstantTokenEmitter {
                 final_token: i == last,
             })
             .collect()
+    }
+
+    fn extend_four_matrix_signals(
+        &mut self,
+        input: &str,
+        signals: &mut Vec<MatrixSignal>,
+    ) {
+        let aggregates = encode_text_aggregates(input);
+        let realm = classify_realm(input);
+        let out = self.four.process(aggregates, realm);
+
+        for (i, value) in out.conditioned.as_array().iter().enumerate() {
+            signals.push(MatrixSignal {
+                lane: i as u8,
+                value_q15: *value,
+            });
+        }
+        signals.push(MatrixSignal {
+            lane: 8,
+            value_q15: out.projected.technical,
+        });
+        signals.push(MatrixSignal {
+            lane: 9,
+            value_q15: out.projected.affective,
+        });
+        signals.push(MatrixSignal {
+            lane: 10,
+            value_q15: out.projected.global,
+        });
+        for (i, value) in out.zeroed.as_array().iter().enumerate() {
+            if *value != 0 {
+                signals.push(MatrixSignal {
+                    lane: (i + 5) as u8,
+                    value_q15: *value,
+                });
+            }
+        }
     }
 }
 
