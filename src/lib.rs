@@ -14,6 +14,7 @@ pub mod calibration;
 pub mod capability;
 pub mod continuity;
 pub mod hierarchy;
+pub mod hybrid_semantic;
 pub mod competition;
 pub mod core;
 pub mod dialogue;
@@ -30,6 +31,8 @@ pub mod inference_matrix;
 pub mod knowledge;
 pub mod knowledge_governor;
 pub mod language;
+pub mod latent_memory;
+pub mod latent_relation;
 pub mod meaning;
 pub mod metacognition;
 pub mod meta_rules;
@@ -47,11 +50,14 @@ pub mod recursive_deliberation;
 pub mod rules;
 pub mod retrieval;
 pub mod semantic;
+pub mod semantic_compression;
+pub mod semantic_embedding;
 pub mod runtime;
 pub mod self_directed_compute;
 pub mod skill_transfer;
 pub mod token_stream;
 pub mod types;
+pub mod vector_retrieval;
 pub mod world;
 pub mod world_model;
 
@@ -73,19 +79,22 @@ pub use deliberation::{DeliberativePlanner, GoalSpec, PlanCandidate};
 pub use discovery::{ContextDiscovery, DiscoveredSimilarity};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
 pub use episodic::{Episode, EpisodeClause, EpisodicMemory};
-pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, run_v25_emergent_intelligence_evaluation, run_v31_autonomous_knowledge_evaluation, run_v37_deliberation_evaluation, run_v45_max_intelligence_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport, V25EmergentIntelligenceReport, V31AutonomousKnowledgeReport, V37DeliberationReport, V45MaxIntelligenceReport};
+pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, run_v25_emergent_intelligence_evaluation, run_v31_autonomous_knowledge_evaluation, run_v37_deliberation_evaluation, run_v45_max_intelligence_evaluation, run_v61_learned_semantic_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport, V25EmergentIntelligenceReport, V31AutonomousKnowledgeReport, V37DeliberationReport, V45MaxIntelligenceReport, V61LearnedSemanticReport};
 pub use four_matrix::{
     adaptive_realm_weights, classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
     FourMatrixOutput, PerspectiveProjection, RealmBand, AGGREGATES,
 };
 pub use goals::{Goal, GoalStack, GoalStatus};
 pub use hierarchy::{AbstractConcept, HierarchicalAbstraction, RoleSignature};
+pub use hybrid_semantic::{HybridSemanticReasoner, LatentInference};
 pub use curriculum::{score as score_curriculum, CurriculumDomain, CurriculumScore, TrialResult};
 pub use induction::{InducedRelation, InductiveReasoner};
 pub use inference_matrix::{f32_to_q15, q15_to_f32, MatrixDecision, MatrixLevel, MatrixSignal, TamThienMatrix, LANES};
 pub use knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
 pub use knowledge_governor::{KnowledgeAssessment, KnowledgeDecision, KnowledgeGovernor};
 pub use language::{LanguageIntent, VietnameseGate};
+pub use latent_memory::{LatentItem, LatentMemory};
+pub use latent_relation::{LatentRelationLearner, RelationPrototype};
 pub use meaning::{Concept, MeaningFormation};
 pub use metacognition::{CognitiveAssessment, CognitiveDecision, MetacognitiveController};
 pub use meta_rules::{MetaRule, MetaRuleCompressor};
@@ -103,11 +112,14 @@ pub use recursive_deliberation::{RecursiveDeliberator, RecursivePass, RecursiveR
 pub use rules::{RuleSynthesizer, SynthesizedRule};
 pub use retrieval::{KnowledgeHit, SemanticRetriever};
 pub use semantic::{concept_id, QueryKind, SemanticClause, SemanticEntity, SemanticQuery, SemanticScene, VietnameseSemanticParser};
+pub use semantic_compression::{SemanticCentroid, SemanticCompressor};
+pub use semantic_embedding::{SemanticEncoder, SemanticVector, SEMANTIC_DIM};
 pub use runtime::{CapacityTier, RuntimeProfile, RuntimeTarget};
 pub use self_directed_compute::{ComputeRoute, ReasoningTier, SelfDirectedCompute};
 pub use skill_transfer::{CrossDomainTransfer, SkillPattern};
 pub use token_stream::{InstantToken, InstantTokenEmitter};
 pub use types::*;
+pub use vector_retrieval::{VectorKnowledgeHit, VectorSemanticRetriever};
 pub use world::WorldGraph;
 pub use world_model::{SimState, TransitionModel, WorldModel};
 
@@ -1411,6 +1423,66 @@ mod tests {
     #[test]
     fn v45_max_intelligence_suite_passes() {
         let report = run_v45_max_intelligence_evaluation();
+        assert!(report.passed(), "report={report:?}");
+        assert_eq!(report.accuracy(), 1.0);
+    }
+
+    #[test]
+    fn semantic_embedding_prefers_related_surface_form() {
+        let encoder = SemanticEncoder;
+        let a = encoder.encode("pin yeu gay ra may cham");
+        let b = encoder.encode("pin yeu gay nen may cham");
+        let c = encoder.encode("hoa sen no buoi sang");
+        assert!(a.cosine(&b) > a.cosine(&c));
+    }
+
+    #[test]
+    fn latent_relation_learns_unseen_causal_paraphrase() {
+        let mut learner = LatentRelationLearner::default();
+        for text in ["a gay ra b", "c gay ra d", "e dan den f"] {
+            learner.observe(text, RelationKind::Causes, 0.96);
+        }
+        assert!(learner
+            .classify("x gay nen y")
+            .is_some_and(|(kind, score)| kind == RelationKind::Causes && score >= 0.58));
+    }
+
+    #[test]
+    fn vector_retrieval_finds_semantically_related_record() {
+        let mut ledger = KnowledgeLedger::new(8);
+        ledger.add(KnowledgeRecord {
+            id: 1,
+            source: "thermal".to_string(),
+            kind: ProvenanceKind::LocalDocument,
+            excerpt: "nhiet cao gay ra throttling va lam may cham".to_string(),
+            timestamp: 1,
+            confidence: 0.95,
+        });
+        ledger.add(KnowledgeRecord {
+            id: 2,
+            source: "lotus".to_string(),
+            kind: ProvenanceKind::LocalDocument,
+            excerpt: "hoa sen no vao buoi sang".to_string(),
+            timestamp: 2,
+            confidence: 0.95,
+        });
+        let hits = VectorSemanticRetriever::default()
+            .recall(&ledger, "nhiet cao gay nen may cham", 1);
+        assert_eq!(hits.first().map(|h| h.record.id), Some(1));
+    }
+
+    #[test]
+    fn semantic_compressor_merges_close_phrases() {
+        let mut compressor = SemanticCompressor::default();
+        let a = compressor.observe("pin yeu gay ra may cham", 0.9);
+        let b = compressor.observe("pin yeu gay nen may cham", 0.9);
+        assert_eq!(a, b);
+        assert_eq!(compressor.len(), 1);
+    }
+
+    #[test]
+    fn v61_learned_semantic_suite_passes() {
+        let report = run_v61_learned_semantic_evaluation();
         assert!(report.passed(), "report={report:?}");
         assert_eq!(report.accuracy(), 1.0);
     }

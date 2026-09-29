@@ -15,6 +15,7 @@ use crate::token_stream::{InstantToken, InstantTokenEmitter};
 use crate::planner::decompose_goal;
 use crate::retrieval::SemanticRetriever;
 use crate::types::{CognitiveMoment, Phenomenon, SenseGate, WorldLevel};
+use crate::vector_retrieval::VectorSemanticRetriever;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct MobileReply {
@@ -34,6 +35,7 @@ pub struct OfflineMobileBia {
     pub decoder: DuyenTokenDecoder,
     pub intelligence: OpenIntelligence,
     pub retriever: SemanticRetriever,
+    pub vector_retriever: VectorSemanticRetriever,
     queue: ActionQueue,
 }
 
@@ -50,6 +52,7 @@ impl OfflineMobileBia {
             decoder: DuyenTokenDecoder::default(),
             intelligence: OpenIntelligence::default(),
             retriever: SemanticRetriever,
+            vector_retriever: VectorSemanticRetriever::default(),
             queue: ActionQueue::new(12),
         }
     }
@@ -73,11 +76,19 @@ impl OfflineMobileBia {
             .intelligence
             .answer_scene(&self.bia.world, &semantic_scene);
         if semantic_scene.query.is_some() && matches!(semantic_answer, OpenAnswer::Unknown) {
-            let hits = self.retriever.recall(&self.knowledge, text, 3);
-            for hit in hits {
+            let mut loaded = 0usize;
+            for hit in self.retriever.recall(&self.knowledge, text, 3) {
                 let _ = self
                     .intelligence
                     .learn(&mut self.bia.world, &hit.record.excerpt, timestamp);
+                loaded += 1;
+            }
+            if loaded == 0 {
+                for hit in self.vector_retriever.recall(&self.knowledge, text, 3) {
+                    let _ = self
+                        .intelligence
+                        .learn(&mut self.bia.world, &hit.record.excerpt, timestamp);
+                }
             }
             semantic_answer = self
                 .intelligence

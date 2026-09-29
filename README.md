@@ -300,3 +300,19 @@ This block adds bounded self-monitoring and self-directed reasoning control on t
 - **Android proof:** `/maxintel` runs the V45–V60 suite natively.
 
 All new loops are strictly bounded. These mechanisms raise BIA's ability to regulate its own reasoning, but do not make it equivalent to a frontier-scale foundation model or establish unrestricted AGI.
+
+
+## Inference V61–V80 — Learned Semantic Intelligence
+
+This block reduces dependence on fixed semantic markers while keeping BIA mobile-bounded and native.
+
+- **Compact semantic embedding:** 32-dimensional deterministic word/subword hashed vectors.
+- **Latent memory:** up to 128 semantic items with online blending and bounded retention.
+- **Learned relation prototypes:** Causes / Enables / Inhibits prototypes are updated online from high-confidence parsed examples.
+- **Latent fallback:** when the rule parser yields no clause, BIA may infer a relation from learned latent prototypes with discounted confidence.
+- **Vector semantic retrieval:** provenance-backed KnowledgeLedger records can be recalled by compact vector similarity when exact token overlap returns nothing.
+- **Semantic compression:** related phrases are merged into at most 32 online centroids to limit memory growth.
+- **Hybrid reasoning:** learned latent relations feed back into the explicit causal WorldGraph, preserving inspectable causal reasoning.
+- **Android proof:** `/semantic` runs the V61–V80 learned-semantic suite natively.
+
+This is not a pretrained language model: the encoder is small, deterministic and online-learned. It improves paraphrase tolerance and semantic retrieval inside the defined proof families, but does not provide unrestricted language understanding comparable to frontier foundation models.
