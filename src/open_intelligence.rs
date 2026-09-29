@@ -1,5 +1,5 @@
 use crate::abstraction::ConceptAbstraction;
-use crate::autonomous_cognitive_loop::{AutonomousCognitiveLoop, CognitiveLoopResult};
+use crate::autonomous_cognitive_loop::{AutonomousCognitiveLoop, CognitiveLoopInput, CognitiveLoopResult};
 use crate::active_evidence::{ActiveEvidenceSeeker, EvidenceRequest};
 use crate::budget::DeviceState;
 use crate::calibration::SelfCalibration;
@@ -275,26 +275,21 @@ impl OpenIntelligence {
 
     pub fn autonomous_cycle(
         &mut self,
-        target: u64,
         answer: &OpenAnswer,
-        support: f32,
-        opposition: f32,
-        path_len: usize,
-        evidence_count: usize,
-        uncertainty: f32,
+        input: &CognitiveLoopInput,
     ) -> CognitiveLoopResult {
         let assessment = self.assess_cognition(
-            support,
-            opposition,
-            path_len,
-            evidence_count,
+            input.support,
+            input.opposition,
+            input.path_len,
+            input.evidence_count,
         );
         self.cognitive_loop.run(
-            target,
+            input.target,
             answer,
             &assessment,
-            uncertainty,
-            evidence_count,
+            input.uncertainty,
+            input.evidence_count,
         )
     }
 
