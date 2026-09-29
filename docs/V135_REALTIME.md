@@ -14,7 +14,7 @@ BIA → **Trading: dữ liệu realtime** → chọn nguồn → nhập 1–3 m�
 - **Twelve Data:** Forex, cổ phiếu, ETF, crypto, ví dụ `EUR/USD,AAPL,BTC/USD`.
   Cần API key DỮ LIỆU của bạn và quyền WebSocket/REST cho từng mã/thị trường.
   Gói dữ liệu, sàn, phiên giao dịch có thể giới hạn hoặc làm trễ giá. Không nhập
-  API key sàn giao dịch, broker hay key có quyền đặt lệnh. Chưa tích hợp MT5,
+  API key sàn giao dịch, broker hay key có quyền đặt lệnh. Mục DEX riêng hỗ trợ V2 trên Ethereum/BNB Chain. Chưa tích hợp MT5,
   Exness/XAUUSDc, futures, options hoặc xác nhận bao phủ mọi sàn.
 
 Key chỉ giữ trong phiên, không lưu vào file, backup, log hoặc trạng thái Android;
@@ -60,3 +60,51 @@ https://github.com/binance/binance-spot-api-docs/blob/master/faqs/market_data_on
 https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams
 https://support.twelvedata.com/en/articles/5620516-how-to-stream-the-data
 https://support.twelvedata.com/en/articles/5745849-timezones
+
+
+## DEX on-chain và chuẩn bị giao dịch
+
+BIA → **DEX: pool thật và chuẩn bị swap**. Chọn Ethereum/Uniswap V2 hoặc BNB
+Chain/PancakeSwap V2; nhập ĐỊA CHỈ POOL V2. Các kiểu V3/V4, Solana, stable-swap,
+bridge, derivatives và router khác chưa được hỗ trợ. Địa chỉ mặc định là pool
+USDC/WETH trên Ethereum; không dùng địa chỉ đó trên BNB Chain.
+
+Adapter chỉ gọi RPC đọc qua PublicNode. Cứ 15 giây sau lần đọc trước nó lấy chainId,
+block, factory, token0/1, getPair, decimals, reserves và balanceOf ở CÙNG block,
+đọc lại block hash để phát hiện thay đổi trong lần thu nhận. Đây là cập nhật
+on-chain bằng polling, không phải tick-level/mempool feed. Block head chưa final;
+RPC là nguồn phải tin cậy, không phải bằng chứng light-client độc lập.
+
+Báo giá một pool dùng số nguyên BigInteger theo công thức V2, phí LP 30 bps
+(Uniswap) hoặc 25 bps (PancakeSwap). Tính lượng ra và minOut theo slippage 0–100 bps.
+Chặn nếu snapshot >60 giây, reserves không cập nhật 5 phút, số dư khác reserves,
+input >1% reserve đầu vào, output bằng 0, chain/factory/getPair sai. Theo dõi biến
+động spot qua 6 block quan sát; giảm >20% thanh khoản hình học giữa hai snapshot
+sẽ khóa phiên đến khi người dùng dừng/kiểm tra/mở lại. Chưa định giá liquidity USD,
+chưa dự báo lợi nhuận, chưa có chiến lược DEX tự chủ hoặc định tuyến nhiều pool.
+
+**Kiểm tra & tạo swap CHƯA KÝ** cần địa chỉ ví CÔNG KHAI. Adapter kiểm tra balance,
+allowance rồi dùng eth_call và eth_estimateGas để kiểm tra giao dịch đọc-only;
+không approve và không broadcast. Đây là preflight EVM của giao dịch dự kiến,
+không phải môi trường giao dịch mô phỏng. Nếu ví chưa đủ allowance, dừng và báo lý do.
+
+Bản JSON chứa chainId, router, recipient bằng chính địa chỉ from, amount, minOut,
+deadline 120 giây, gas ước tính +20% và calldata swapExactTokensForTokens. Snapshot
+cho bước tạo phải mới trong 30 giây. Bản nháp vô hiệu trong app khi dừng/rời màn hình;
+copy từ chối nếu form thay đổi, hết deadline hoặc báo giá đang bị chặn. Bản đã copy
+ra ngoài vẫn cần ví kiểm tra và chịu deadline trong calldata.
+
+CHƯA tích hợp kết nối/ký bằng ví, gửi giao dịch, theo dõi receipt hay xác nhận khớp.
+JSON chưa ký không tự giao dịch được; không coi việc tạo nó là đã đặt lệnh.
+Không có seed/private key, eth_sendTransaction, eth_sendRawTransaction hoặc approve.
+Không xác minh được honeypot, token tax, blacklist/owner upgrade, MEV hay khả năng
+bán trong tương lai. Preflight thành công không bảo đảm giao dịch thực tế thành công.
+
+Kiểm thử thêm: số nguyên/decimals/minOut/calldata, từ chối địa chỉ ví sai, đọc
+pool thật trên Ethereum và BNB Chain. Không kiểm thử ký/giao dịch tiền thật.
+
+Nguồn giao thức/factory:
+https://developers.uniswap.org/docs/protocols/v2/deployments
+https://developer.pancakeswap.finance/contracts/v2/addresses
+https://docs.pancakeswap.finance/earn/pancakeswap-pools
+https://ethereum.publicnode.com/
