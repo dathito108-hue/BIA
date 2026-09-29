@@ -64,7 +64,7 @@ pub enum RelationKind {
     GoalRelevant,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Relation {
     pub from: u64,
     pub to: u64,
@@ -73,7 +73,7 @@ pub struct Relation {
     pub confidence: f32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Hypothesis {
     pub source: u64,
     pub target: u64,
@@ -81,7 +81,7 @@ pub struct Hypothesis {
     pub support: Vec<u64>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Intention {
     pub action: u32,
     pub target: Option<u64>,
@@ -99,7 +99,7 @@ pub enum ComputeMode {
     Sau,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CognitiveMoment {
     pub observed: Vec<u64>,
     pub active_causes: Vec<Relation>,
