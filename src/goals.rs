@@ -75,4 +75,8 @@ impl GoalStack {
     pub fn len(&self) -> usize {
         self.goals.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.goals.is_empty()
+    }
 }
