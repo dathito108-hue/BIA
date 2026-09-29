@@ -113,6 +113,45 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeImportContinuity(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeIngestContent(
+    mut env: JNIEnv,
+    _class: JClass,
+    source: JString,
+    kind: jint,
+    content: JString,
+    timestamp: jlong,
+    confidence: jfloat,
+) -> jint {
+    let source = env
+        .get_string(&source)
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let content = env
+        .get_string(&content)
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let provenance = match kind {
+        1 => crate::ProvenanceKind::SharedText,
+        2 => crate::ProvenanceKind::LocalDocument,
+        3 => crate::ProvenanceKind::WebExcerpt,
+        4 => crate::ProvenanceKind::System,
+        _ => crate::ProvenanceKind::User,
+    };
+    runtime()
+        .lock()
+        .map(|mut app| {
+            app.ingest_content(
+                &source,
+                provenance,
+                &content,
+                timestamp.max(0) as u64,
+                confidence.clamp(0.0, 1.0),
+            ) as jint
+        })
+        .unwrap_or(0)
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
@@ -142,10 +181,11 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeStatus(
                 String::new()
             };
             format!(
-                "Chu kỳ {}  •  Cảnh {}  •  Chủng tử {}{}{}",
+                "Chu kỳ {}  •  Cảnh {}  •  Chủng tử {}  •  Nguồn {}{}{}",
                 app.bia.cycle(),
                 app.bia.world.len(),
                 app.bia.memory.len(),
+                app.knowledge.len(),
                 goal,
                 queue
             )
