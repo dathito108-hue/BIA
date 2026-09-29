@@ -90,3 +90,15 @@ The mobile runtime now adds faster practical continuity and voice interaction:
 - `Tiếp tục` can derive the next action from an active research/search goal.
 - Every queued external action still requires a separate user confirmation.
 - Action success/failure continues to become experiential memory.
+
+
+## Capability V6–V8
+
+This capability pack expands BIA without introducing an LLM/Transformer/SSM backend:
+
+- **Perception intake:** Android Share can send plain text directly into BIA; the app can also open local text documents through the system document picker.
+- **Provenance ledger:** every ingested source is recorded as user, shared text, local document, web excerpt or system context.
+- **Knowledge-to-experience:** ingested content is converted into bounded BIA phenomena and seed experience rather than stored only as opaque text.
+- **Goal decomposition:** explicit goals can be split into multiple executable device actions when the goal contains recognizable action clauses.
+- **Continuity v2:** active goals, pending actions and provenance records survive restart.
+- **No broad storage permission:** local document access uses Android's Storage Access Framework.
