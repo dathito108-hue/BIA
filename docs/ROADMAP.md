@@ -1,44 +1,68 @@
-# BIA Roadmap
+# BIA-DCA Roadmap
 
-## M0 — BIA-KSANA-1 Process Core
-Architecture contract, bounded recurrent state, five-functional-factor cognitive moment, sparse conditional update, revisable self-model.
+## D0 — Canonical Dharma Core
+Tam Thiên WorldGraph, Duyên relations, bounded CognitiveMoment, Chủng tử memory, Trung Đạo device budgeter and Quán–Trí–Hành loop.
 
-## M1 — Trainable Skandha Cells
-Replace reference formulas with trainable projections, gates, normalization, residual stabilization and learned sparse Pratitya routing.
+**Acceptance:** dependency-free Rust core; deterministic ceilings; tests; no imported model-family core.
 
-Acceptance: stable forward/backward pass; fixed memory bounds; no quadratic sequence operator.
+## D1 — Persistent Dharma Memory
+Binary portable storage for phenomena, relations, seeds, confidence and provenance; crash-safe append/checkpoint/restore.
 
-## M2 — Alaya Seed Memory
-On-device append/merge/decay/retrieve memory traces with bounded top-k activation and persistence.
+**Acceptance:** same memory file can move between Android/desktop builds; bounded corruption recovery.
 
-Acceptance: deterministic memory ceiling; retrieval benchmarks; memory survives process restart.
+## D2 — Meaning Formation
+Incremental concept formation from repeated phenomena, relation induction, contradiction tracking, confidence calibration and forgetting.
 
-## M3 — Mobile Quantization + Kernels
-Int8 activations/state; int4 weight packaging; ARM64 NEON kernels; operator fusion; tiled matrix/vector kernels.
+**Acceptance:** learns new categories/relations from experience without global weight retraining.
 
-Acceptance: Android ARM64 reference parity and measured latency/RAM.
+## D3 — Language as a Gate, Not the Mind
+Vietnamese-first byte/phoneme/word observation and expression layers that translate language into/from BIA phenomena and intentions.
 
-## M4 — Ayatana Adapters
-Streaming text/byte input, audio, vision embeddings and internal-state/event channel.
+**Acceptance:** internal reasoning remains phenomenon/relation based; language adapter can be disabled.
 
-Acceptance: adapters feed the same BIA process core; modality modules are detachable.
+## D4 — Multi-Cảnh Perception
+Image/audio/sensor adapters produce normalized phenomena; cross-modal identity binding occurs in the Duyên graph.
 
-## M5 — Recurrent Reasoning + Sankhara Planner
-Iterative internal moments, candidate formation, uncertainty/confidence, stop policy, tool/action proposal.
+**Acceptance:** adapters remain replaceable and do not alter the BIA core.
 
-Acceptance: bounded reasoning cycles and interruptible execution.
+## D5 — Deep Quán and Planning
+Counterfactual branches, causal-chain search, goal decomposition, uncertainty-directed observation and explicit stop/abstain policy.
 
-## M6 — Android Native Runtime
-JNI boundary, model package, memory-mapped weights, thermal/battery-aware Madhyama Budgeter.
+**Acceptance:** bounded cycles; inspectable hypotheses; deterministic resource caps.
 
-Acceptance: entirely local inference on Android; no server required.
+## D6 — Cư Trần Action Fabric
+Typed tools and device actions, permission boundaries, consequence receipts and world feedback.
 
-## M7 — On-device Adaptation
-Small bounded trainable surfaces, seed-memory consolidation, replay/evaluation gates and rollback.
+**Acceptance:** cognition proposes; authority layer permits/denies; irreversible actions require explicit policy approval.
 
-Acceptance: local personalization cannot silently replace the validated base model.
+## D7 — On-device Huân Tập
+Experience consolidation, causal-credit updates, relation revision, rollbackable skill packages and local evaluation.
 
-## M8 — Integrated Mobile Intelligence
-Chat, memory, perception, planning and permitted device actions on one BIA runtime.
+**Acceptance:** learning is measurable and reversible; base contracts cannot silently mutate.
 
-Acceptance: installable Android application with offline core operation.
+## D8 — Universal Runtime
+no_std-capable subset where practical, ARM64/x86_64/WASM targets, Android wrapper, persistence and benchmark suite.
+
+**Acceptance:** one canonical data/runtime contract across device classes.
+
+## D9 — BIA Intelligence Curriculum
+Progressive environment curriculum covering language, physical/common-sense relations, tool use, planning and self-correction.
+
+**Acceptance:** benchmark improvements come from BIA learning mechanisms rather than substituting an external foundation model.
+
+## D10 — Integrated Mobile BIA
+Offline-first app with memory, Vietnamese dialogue, perception, planning and permission-gated actions.
+
+**Acceptance:** install-and-run mobile package; cloud optional; measured RAM/latency/energy tiers.
+
+## Highest-level completion criterion
+
+BIA is considered mature only when all of the following are demonstrated empirically:
+1. portable cognition across device classes;
+2. continual learning without catastrophic loss of validated skills;
+3. grounded language/perception/action loop;
+4. causal and counterfactual reasoning;
+5. calibrated uncertainty and abstention;
+6. bounded resource usage;
+7. transparent, inspectable memory and hypotheses;
+8. no hidden dependence on an LLM/Transformer/SSM/Mamba runtime.
