@@ -9,8 +9,10 @@ use crate::duyen_token::DuyenTokenDecoder;
 use crate::goals::{GoalStack, GoalStatus};
 use crate::knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
 use crate::language::VietnameseGate;
+use crate::open_reasoning::{OpenAnswer, SemanticReasoner};
 use crate::token_stream::{InstantToken, InstantTokenEmitter};
 use crate::planner::decompose_goal;
+use crate::retrieval::SemanticRetriever;
 use crate::types::{CognitiveMoment, Phenomenon, SenseGate, WorldLevel};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -29,6 +31,8 @@ pub struct OfflineMobileBia {
     pub knowledge: KnowledgeLedger,
     pub tokens: InstantTokenEmitter,
     pub decoder: DuyenTokenDecoder,
+    pub semantic: SemanticReasoner,
+    pub retriever: SemanticRetriever,
     queue: ActionQueue,
 }
 
@@ -43,6 +47,8 @@ impl OfflineMobileBia {
             knowledge: KnowledgeLedger::new(96),
             tokens: InstantTokenEmitter::default(),
             decoder: DuyenTokenDecoder::default(),
+            semantic: SemanticReasoner::default(),
+            retriever: SemanticRetriever,
             queue: ActionQueue::new(12),
         }
     }
@@ -58,6 +64,24 @@ impl OfflineMobileBia {
             text: text.to_string(),
             timestamp,
         });
+
+        let semantic_scene = self
+            .semantic
+            .ingest(&mut self.bia.world, text, timestamp);
+        let mut semantic_answer = self
+            .semantic
+            .answer_scene(&self.bia.world, &semantic_scene);
+        if semantic_scene.query.is_some() && matches!(semantic_answer, OpenAnswer::Unknown) {
+            let hits = self.retriever.recall(&self.knowledge, text, 3);
+            for hit in hits {
+                let _ = self
+                    .semantic
+                    .ingest(&mut self.bia.world, &hit.record.excerpt, timestamp);
+            }
+            semantic_answer = self
+                .semantic
+                .answer_scene(&self.bia.world, &semantic_scene);
+        }
 
         if let Some(goal) = extract_goal(text) {
             let id = stable_id(goal, timestamp);
@@ -110,7 +134,11 @@ impl OfflineMobileBia {
 
         let pending = self.queue.front().cloned();
 
-        let mut reply = if let Some(lesson) = teaching {
+        let mut reply = if semantic_scene.query.is_some()
+            && !matches!(semantic_answer, OpenAnswer::Unknown)
+        {
+            open_answer_text(&semantic_answer)
+        } else if let Some(lesson) = teaching {
             format!(
                 "Tôi đã ghi nhận “{}” cùng nguồn gốc và huân tập nó vào kinh nghiệm cục bộ.",
                 lesson.trim()
@@ -173,6 +201,7 @@ impl OfflineMobileBia {
             confidence: confidence.clamp(0.0, 1.0),
         });
         let _ = self.decoder.learn_text(&excerpt);
+        let _ = self.semantic.ingest(&mut self.bia.world, &excerpt, timestamp);
 
         let phenomena = self.language.perceive(&excerpt, timestamp);
         let mut count = 0usize;
@@ -356,4 +385,38 @@ fn action_features(action: &DeviceAction) -> Vec<f32> {
     }
     out[0] += action.confidence;
     out
+}
+
+
+fn open_answer_text(answer: &OpenAnswer) -> String {
+    match answer {
+        OpenAnswer::Supported { confidence, path } => format!(
+            "Có cơ sở nhân–quả để ủng hộ kết luận này. Độ tin cậy {:.0}%, chuỗi Duyên có {} mắt xích.",
+            confidence * 100.0,
+            path.len().saturating_sub(1)
+        ),
+        OpenAnswer::Opposed { confidence, path } => format!(
+            "Bằng chứng hiện tại nghiêng về phía phủ định. Độ tin cậy {:.0}%, chuỗi ức chế có {} mắt xích.",
+            confidence * 100.0,
+            path.len().saturating_sub(1)
+        ),
+        OpenAnswer::Contradicted { support, opposition } => format!(
+            "Tôi thấy mâu thuẫn thật trong các Duyên: ủng hộ {:.0}% và phản đối {:.0}%. Chưa nên kết luận một chiều.",
+            support * 100.0,
+            opposition * 100.0
+        ),
+        OpenAnswer::Counterfactual {
+            support_delta,
+            factual_support,
+            counterfactual_support,
+        } => format!(
+            "Nếu bỏ điều kiện đó, mức ủng hộ thay đổi {:.0} điểm phần trăm: từ {:.0}% xuống {:.0}%.",
+            support_delta * 100.0,
+            factual_support * 100.0,
+            counterfactual_support * 100.0
+        ),
+        OpenAnswer::Unknown => {
+            "Tôi chưa dựng được chuỗi Duyên đủ chắc từ dữ kiện hiện có.".to_string()
+        }
+    }
 }

@@ -21,3 +21,4 @@ jobs:
       - run: cargo run --release --example v14_stress
       - run: cargo run --release --example v15_reasoning
       - run: cargo run --release --example v16_generalization
+      - run: cargo run --release --example v18_open_reasoning

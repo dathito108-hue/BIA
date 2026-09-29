@@ -62,6 +62,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     public static native String nativeStressV14(int iterations);
     public static native String nativeReasoningV15();
     public static native String nativeGeneralizeV16();
+    public static native String nativeOpenReasoningV18();
     public static native long nativeCycleCount();
     public static native String nativeStatus();
     public static native boolean nativeSave(String path);
@@ -468,6 +469,18 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     refreshStatus();
                 });
             }, "bia-generalization-proof").start();
+            return;
+        }
+
+        if (text.equalsIgnoreCase("/openproof") || text.equalsIgnoreCase("openproof")) {
+            new Thread(() -> {
+                String report = nativeOpenReasoningV18();
+                runOnUiThread(() -> {
+                    lastReply = report;
+                    addBubble(report, false);
+                    refreshStatus();
+                });
+            }, "bia-open-reasoning-proof").start();
             return;
         }
 
