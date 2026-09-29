@@ -26,3 +26,4 @@ jobs:
       - run: cargo run --release --example v25_emergent_intelligence
       - run: cargo run --release --example v31_autonomous_knowledge
       - run: cargo run --release --example v37_deliberation
+      - run: cargo run --release --example v45_max_intelligence
