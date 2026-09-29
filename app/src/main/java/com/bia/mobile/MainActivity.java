@@ -68,6 +68,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     public static native String nativeAutonomyV31();
     public static native String nativeDeliberationV37();
     public static native String nativeMaxIntelligenceV45();
+    public static native String nativeLearnedSemanticV61();
     public static native long nativeCycleCount();
     public static native String nativeStatus();
     public static native boolean nativeSave(String path);
@@ -546,6 +547,18 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     refreshStatus();
                 });
             }, "bia-max-intelligence-proof").start();
+            return;
+        }
+
+        if (text.equalsIgnoreCase("/semantic") || text.equalsIgnoreCase("semantic")) {
+            new Thread(() -> {
+                String report = nativeLearnedSemanticV61();
+                runOnUiThread(() -> {
+                    lastReply = report;
+                    addBubble(report, false);
+                    refreshStatus();
+                });
+            }, "bia-learned-semantic-proof").start();
             return;
         }
 
