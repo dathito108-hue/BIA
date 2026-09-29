@@ -1004,3 +1004,202 @@ pub fn run_v25_emergent_intelligence_evaluation() -> V25EmergentIntelligenceRepo
         elapsed: start.elapsed(),
     }
 }
+
+
+#[derive(Clone, Debug)]
+pub struct V31AutonomousKnowledgeReport {
+    pub cases: usize,
+    pub hierarchy_passes: usize,
+    pub hypothesis_passes: usize,
+    pub falsification_passes: usize,
+    pub meta_rule_passes: usize,
+    pub governance_passes: usize,
+    pub elapsed: Duration,
+}
+
+impl V31AutonomousKnowledgeReport {
+    pub fn passed(&self) -> bool {
+        self.hierarchy_passes == self.cases
+            && self.hypothesis_passes == self.cases
+            && self.falsification_passes == self.cases
+            && self.meta_rule_passes == self.cases
+            && self.governance_passes == self.cases
+    }
+
+    pub fn accuracy(&self) -> f32 {
+        let denom = (self.cases * 5).max(1) as f32;
+        (self.hierarchy_passes
+            + self.hypothesis_passes
+            + self.falsification_passes
+            + self.meta_rule_passes
+            + self.governance_passes) as f32
+            / denom
+    }
+}
+
+pub fn run_v31_autonomous_knowledge_evaluation() -> V31AutonomousKnowledgeReport {
+    use crate::autonomous_hypothesis::AutonomousHypothesisGenerator;
+    use crate::competition::CandidateHypothesis;
+    use crate::episodic::EpisodicMemory;
+    use crate::hierarchy::HierarchicalAbstraction;
+    use crate::knowledge_governor::{KnowledgeDecision, KnowledgeGovernor};
+    use crate::meta_rules::MetaRuleCompressor;
+    use crate::rules::RuleSynthesizer;
+    use crate::semantic::VietnameseSemanticParser;
+    use crate::types::{Phenomenon, Relation, RelationKind, SenseGate, WorldLevel};
+    use crate::world::WorldGraph;
+
+    let start = Instant::now();
+    let cases = 128usize;
+    let mut hierarchy = 0usize;
+    let mut hypothesis = 0usize;
+    let mut falsification = 0usize;
+    let mut meta_rule = 0usize;
+    let mut governance = 0usize;
+
+    for i in 0..cases {
+        let base = i as u64 * 10_000;
+
+        let mut h_world = WorldGraph::new(64, 128);
+        for id in [base + 1, base + 2, base + 3, base + 4] {
+            h_world.upsert(Phenomenon::new(
+                id,
+                WorldLevel::TrungThien,
+                SenseGate::Mind,
+                id as u32,
+                vec![0.5],
+                0.9,
+                0.7,
+                1,
+            ));
+        }
+        for (from, to) in [
+            (base + 1, base + 3),
+            (base + 1, base + 4),
+            (base + 2, base + 3),
+            (base + 2, base + 4),
+        ] {
+            h_world.relate(Relation {
+                from,
+                to,
+                kind: RelationKind::Causes,
+                strength: 0.9,
+                confidence: 0.9,
+            });
+        }
+        let mut abstraction = HierarchicalAbstraction::default();
+        let _ = abstraction.discover(&h_world);
+        if abstraction
+            .concept_for(base + 1)
+            .is_some_and(|c| c.members.contains(&(base + 2)))
+        {
+            hierarchy += 1;
+        }
+
+        let mut p_world = WorldGraph::new(32, 64);
+        p_world.relate(Relation {
+            from: base + 10,
+            to: base + 11,
+            kind: RelationKind::Causes,
+            strength: 1.0,
+            confidence: 1.0,
+        });
+        p_world.relate(Relation {
+            from: base + 11,
+            to: base + 12,
+            kind: RelationKind::Enables,
+            strength: 1.0,
+            confidence: 1.0,
+        });
+        let generator = AutonomousHypothesisGenerator::default();
+        let generated = generator.generate(&p_world);
+        let candidate = generated.iter().find(|c| {
+            c.relation.from == base + 10
+                && c.relation.to == base + 12
+                && c.relation.kind == RelationKind::Causes
+        });
+        if candidate.is_some() {
+            hypothesis += 1;
+        }
+
+        let governor = KnowledgeGovernor::default();
+        let contradictory = CandidateHypothesis {
+            relation: Relation {
+                from: base + 20,
+                to: base + 21,
+                kind: RelationKind::Causes,
+                strength: 0.9,
+                confidence: 0.9,
+            },
+            source: "candidate",
+            evidence: 2,
+        };
+        let mut f_world = WorldGraph::new(16, 32);
+        f_world.relate(Relation {
+            from: base + 20,
+            to: base + 21,
+            kind: RelationKind::Inhibits,
+            strength: 1.0,
+            confidence: 1.0,
+        });
+        if governor.assess(&f_world, &contradictory).decision == KnowledgeDecision::Reject {
+            falsification += 1;
+        }
+
+        let parser = VietnameseSemanticParser;
+        let mut episodes = EpisodicMemory::default();
+        for text in [
+            format!("a1_{i} gây ra b1_{i}. b1_{i} cho phép c1_{i}."),
+            format!("a2_{i} gây ra b2_{i}. b2_{i} cho phép c2_{i}."),
+            format!("d1_{i} cho phép e1_{i}. e1_{i} gây ra f1_{i}."),
+            format!("d2_{i} cho phép e2_{i}. e2_{i} gây ra f2_{i}."),
+        ] {
+            let scene = parser.parse(&text);
+            episodes.observe(&scene, 1, 0.8);
+        }
+        let mut synth = RuleSynthesizer::default();
+        let _ = synth.synthesize(&episodes);
+        let mut meta = MetaRuleCompressor::default();
+        let _ = meta.compress(synth.rules());
+        if meta
+            .rules()
+            .iter()
+            .any(|m| m.output == RelationKind::Causes && m.source_rules >= 2)
+        {
+            meta_rule += 1;
+        }
+
+        let promotable = CandidateHypothesis {
+            relation: Relation {
+                from: base + 30,
+                to: base + 31,
+                kind: RelationKind::Causes,
+                strength: 1.0,
+                confidence: 1.0,
+            },
+            source: "strong-two-hop",
+            evidence: 3,
+        };
+        let mut g_world = WorldGraph::new(16, 32);
+        let assessment = governor.promote_if_valid(&mut g_world, &promotable);
+        if assessment.decision == KnowledgeDecision::Promote
+            && g_world.edges().iter().any(|e| {
+                e.from == base + 30
+                    && e.to == base + 31
+                    && e.kind == RelationKind::Causes
+            })
+        {
+            governance += 1;
+        }
+    }
+
+    V31AutonomousKnowledgeReport {
+        cases,
+        hierarchy_passes: hierarchy,
+        hypothesis_passes: hypothesis,
+        falsification_passes: falsification,
+        meta_rule_passes: meta_rule,
+        governance_passes: governance,
+        elapsed: start.elapsed(),
+    }
+}

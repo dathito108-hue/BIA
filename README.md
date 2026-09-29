@@ -254,3 +254,18 @@ This block makes BIA learn more structure from repeated experience instead of re
 Hard bounds remain: 128 episodes, 12 clauses per episode, 16 discovered similarities per pass, 32 synthesized rules, 32 rule applications per pass, and bounded hypothesis scoring.
 
 These mechanisms demonstrate structured learning and transfer over the defined proof families. They do not establish human-level or frontier-model open intelligence.
+
+
+## Inference V31–V36 — Autonomous Knowledge Formation
+
+This block lets BIA create and govern higher-level knowledge from existing experience.
+
+- **Hierarchical Abstraction:** entities with the same bounded causal-role signature are grouped into higher-level abstract concepts.
+- **Autonomous Hypothesis Generation:** missing two-hop causal/enabling/inhibiting closures are proposed as hypotheses rather than silently treated as facts.
+- **Falsification / Knowledge Governor:** every autonomous hypothesis is assessed against direct supporting and opposing evidence before promotion.
+- **Meta-Rule Compression:** multiple specific synthesized rules sharing the same output relation can be compressed into a bounded higher-order rule.
+- **Layered Knowledge Formation:** learning runs through episodes → discovery → hierarchy → rules → meta-rules → analogy → autonomous hypotheses → validation.
+- **Bounded promotion:** only hypotheses above a support threshold and below an opposition threshold are written back to the durable WorldGraph.
+- **Android proof:** `/autonomy` runs the V31–V36 knowledge-formation suite natively.
+
+Hard bounds remain on abstract concepts, hypothesis candidates, meta-rules and promotion passes. The proof demonstrates autonomous structured knowledge formation inside the defined causal representation; it does not establish unrestricted autonomous scientific discovery or frontier-model intelligence.

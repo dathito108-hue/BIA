@@ -1,9 +1,13 @@
 use crate::abstraction::ConceptAbstraction;
+use crate::autonomous_hypothesis::AutonomousHypothesisGenerator;
 use crate::competition::{CandidateHypothesis, CompetitionResult, HypothesisCompetition};
 use crate::discovery::ContextDiscovery;
 use crate::episodic::EpisodicMemory;
 use crate::analogy::AnalogicalReasoner;
+use crate::hierarchy::HierarchicalAbstraction;
 use crate::induction::{InducedRelation, InductiveReasoner};
+use crate::knowledge_governor::{KnowledgeAssessment, KnowledgeGovernor};
+use crate::meta_rules::MetaRuleCompressor;
 use crate::open_reasoning::{OpenAnswer, SemanticReasoner};
 use crate::rules::RuleSynthesizer;
 use crate::semantic::SemanticScene;
@@ -19,6 +23,10 @@ pub struct OpenIntelligence {
     discovery: ContextDiscovery,
     rules: RuleSynthesizer,
     competition: HypothesisCompetition,
+    hierarchy: HierarchicalAbstraction,
+    hypotheses: AutonomousHypothesisGenerator,
+    meta_rules: MetaRuleCompressor,
+    governor: KnowledgeGovernor,
 }
 
 impl OpenIntelligence {
@@ -28,9 +36,17 @@ impl OpenIntelligence {
         let scene = self.semantic.ingest(world, &canonical, timestamp);
         self.episodes.observe(&scene, timestamp, 0.5);
         let _ = self.discovery.apply(world);
+        let _ = self.hierarchy.discover(world);
         let _ = self.rules.synthesize(&self.episodes);
         let _ = self.rules.apply(world);
+        let _ = self.meta_rules.compress(self.rules.rules());
+        let _ = self.meta_rules.apply(world);
         let _ = self.analogy.apply(world);
+
+        let candidates = self.hypotheses.generate(world);
+        for candidate in candidates.iter().take(8) {
+            let _ = self.governor.promote_if_valid(world, candidate);
+        }
         scene
     }
 
@@ -67,6 +83,26 @@ impl OpenIntelligence {
 
     pub fn rules(&self) -> &RuleSynthesizer {
         &self.rules
+    }
+
+    pub fn hierarchy(&self) -> &HierarchicalAbstraction {
+        &self.hierarchy
+    }
+
+    pub fn meta_rules(&self) -> &MetaRuleCompressor {
+        &self.meta_rules
+    }
+
+    pub fn autonomous_hypotheses(&self, world: &WorldGraph) -> Vec<CandidateHypothesis> {
+        self.hypotheses.generate(world)
+    }
+
+    pub fn assess_hypothesis(
+        &self,
+        world: &WorldGraph,
+        candidate: &CandidateHypothesis,
+    ) -> KnowledgeAssessment {
+        self.governor.assess(world, candidate)
     }
 
     pub fn compete(&self, candidates: &[CandidateHypothesis]) -> CompetitionResult {

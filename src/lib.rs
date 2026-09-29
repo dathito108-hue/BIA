@@ -3,6 +3,7 @@
 #[cfg(target_os = "android")]
 pub mod android_ffi;
 pub mod abstraction;
+pub mod autonomous_hypothesis;
 pub mod analogy;
 pub mod action;
 pub mod action_queue;
@@ -10,6 +11,7 @@ pub mod adaptation;
 pub mod budget;
 pub mod capability;
 pub mod continuity;
+pub mod hierarchy;
 pub mod competition;
 pub mod core;
 pub mod dialogue;
@@ -23,8 +25,10 @@ pub mod goals;
 pub mod induction;
 pub mod inference_matrix;
 pub mod knowledge;
+pub mod knowledge_governor;
 pub mod language;
 pub mod meaning;
+pub mod meta_rules;
 pub mod perception;
 pub mod planner;
 pub mod planning;
@@ -43,6 +47,7 @@ pub mod types;
 pub mod world;
 
 pub use abstraction::{ConceptAbstraction, ConceptGroup};
+pub use autonomous_hypothesis::AutonomousHypothesisGenerator;
 pub use action::{ActionDecision, ActionProposal, Authority, CuTranPolicy};
 pub use analogy::{AnalogicalHypothesis, AnalogicalReasoner};
 pub use action_queue::ActionQueue;
@@ -56,18 +61,21 @@ pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
 pub use discovery::{ContextDiscovery, DiscoveredSimilarity};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
 pub use episodic::{Episode, EpisodeClause, EpisodicMemory};
-pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, run_v25_emergent_intelligence_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport, V25EmergentIntelligenceReport};
+pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, run_v25_emergent_intelligence_evaluation, run_v31_autonomous_knowledge_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport, V25EmergentIntelligenceReport, V31AutonomousKnowledgeReport};
 pub use four_matrix::{
     adaptive_realm_weights, classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
     FourMatrixOutput, PerspectiveProjection, RealmBand, AGGREGATES,
 };
 pub use goals::{Goal, GoalStack, GoalStatus};
+pub use hierarchy::{AbstractConcept, HierarchicalAbstraction, RoleSignature};
 pub use curriculum::{score as score_curriculum, CurriculumDomain, CurriculumScore, TrialResult};
 pub use induction::{InducedRelation, InductiveReasoner};
 pub use inference_matrix::{f32_to_q15, q15_to_f32, MatrixDecision, MatrixLevel, MatrixSignal, TamThienMatrix, LANES};
 pub use knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
+pub use knowledge_governor::{KnowledgeAssessment, KnowledgeDecision, KnowledgeGovernor};
 pub use language::{LanguageIntent, VietnameseGate};
 pub use meaning::{Concept, MeaningFormation};
+pub use meta_rules::{MetaRule, MetaRuleCompressor};
 pub use perception::{MultiCanh, PerceptPacket};
 pub use planner::{decompose_goal, Plan as DevicePlan};
 pub use planning::{DeepQuan, Plan, PlanStep};
@@ -1097,6 +1105,116 @@ mod tests {
     #[test]
     fn v25_emergent_intelligence_suite_passes() {
         let report = run_v25_emergent_intelligence_evaluation();
+        assert!(report.passed(), "report={report:?}");
+        assert_eq!(report.accuracy(), 1.0);
+    }
+
+    #[test]
+    fn hierarchy_forms_superconcept_from_shared_roles() {
+        let mut world = WorldGraph::new(16, 32);
+        for id in 1..=4u64 {
+            world.upsert(Phenomenon::new(
+                id,
+                WorldLevel::TrungThien,
+                SenseGate::Mind,
+                id as u32,
+                vec![0.5],
+                0.9,
+                0.7,
+                1,
+            ));
+        }
+        for (from, to) in [(1,3),(1,4),(2,3),(2,4)] {
+            world.relate(Relation {
+                from,
+                to,
+                kind: RelationKind::Causes,
+                strength: 0.9,
+                confidence: 0.9,
+            });
+        }
+        let mut hierarchy = HierarchicalAbstraction::default();
+        assert!(hierarchy.discover(&world) > 0);
+        assert!(hierarchy
+            .concept_for(1)
+            .is_some_and(|c| c.members.contains(&2)));
+    }
+
+    #[test]
+    fn autonomous_hypothesis_is_generated_from_unclosed_chain() {
+        let mut world = WorldGraph::new(16, 32);
+        world.relate(Relation {
+            from: 1,
+            to: 2,
+            kind: RelationKind::Causes,
+            strength: 1.0,
+            confidence: 1.0,
+        });
+        world.relate(Relation {
+            from: 2,
+            to: 3,
+            kind: RelationKind::Enables,
+            strength: 1.0,
+            confidence: 1.0,
+        });
+        let xs = AutonomousHypothesisGenerator::default().generate(&world);
+        assert!(xs.iter().any(|c| {
+            c.relation.from == 1
+                && c.relation.to == 3
+                && c.relation.kind == RelationKind::Causes
+        }));
+    }
+
+    #[test]
+    fn knowledge_governor_rejects_strong_counterevidence() {
+        let candidate = CandidateHypothesis {
+            relation: Relation {
+                from: 1,
+                to: 3,
+                kind: RelationKind::Causes,
+                strength: 0.9,
+                confidence: 0.9,
+            },
+            source: "test",
+            evidence: 2,
+        };
+        let mut world = WorldGraph::new(8, 16);
+        world.relate(Relation {
+            from: 1,
+            to: 3,
+            kind: RelationKind::Inhibits,
+            strength: 1.0,
+            confidence: 1.0,
+        });
+        let assessment = KnowledgeGovernor::default().assess(&world, &candidate);
+        assert_eq!(assessment.decision, KnowledgeDecision::Reject);
+    }
+
+    #[test]
+    fn meta_rule_compresses_multiple_specific_rules() {
+        let parser = VietnameseSemanticParser;
+        let mut memory = EpisodicMemory::default();
+        for text in [
+            "a1 gây ra b1. b1 cho phép c1.",
+            "a2 gây ra b2. b2 cho phép c2.",
+            "d1 cho phép e1. e1 gây ra f1.",
+            "d2 cho phép e2. e2 gây ra f2.",
+        ] {
+            memory.observe(&parser.parse(text), 1, 0.8);
+        }
+        let mut synth = RuleSynthesizer::default();
+        let _ = synth.synthesize(&memory);
+        let mut meta = MetaRuleCompressor::default();
+        assert!(meta.compress(synth.rules()) > 0);
+        assert!(meta
+            .rules()
+            .iter()
+            .any(|r| r.output == RelationKind::Causes && r.source_rules >= 2));
+    }
+
+    #[test]
+    fn v31_autonomous_knowledge_suite_passes() {
+        let report = run_v31_autonomous_knowledge_evaluation();
         assert!(report.passed(), "report={report:?}");
         assert_eq!(report.accuracy(), 1.0);
     }
