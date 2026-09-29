@@ -366,3 +366,29 @@ This increment fixes measured correctness gaps in the V101 review and causal cha
 - Android app version: 1.29.0.
 
 These are targeted improvements in BIA's explicit causal representation, not evidence of general-purpose or frontier-level intelligence. No on-phone latency improvement is claimed without device measurements.
+
+## V130 — Multi-document causal evidence search
+
+Causal chat now follows explicit concept links across local provenance records before
+rendering an answer. It can recover missing A → … → B chains whose intermediate
+documents share no query keywords, and inspect opposing evidence even when the active
+world already supports a claim. Retrieval uses a temporary graph; it does not train
+on the retrieved text, mutate durable facts, or execute commands found in documents.
+
+- Parse each eligible excerpt once, then traverse source-linked clauses up to six passes.
+- Preserve imported record IDs; source confidence discounts new edge strength.
+- Re-reading an existing edge does not reinforce it; shared paths do not establish independent evidence.
+- Hard limits: 96 records, 2,048 Unicode characters per excerpt, 12 clauses per record,
+  512 candidate clauses, 128 imported clauses and 256 visited concepts. Oversized
+  excerpts are skipped instead of asserting facts from truncated sentences.
+- Device pressure reduces the pass budget; low-memory stillness skips document search.
+  The response discloses when document search was budget-limited.
+- Android `/evidence` runs the native 128-case evidence evaluation, including a
+  top-three lexical retrieval baseline, conflict detection and durable-memory isolation.
+- Android version: 1.30.0. Existing counterfactual retrieval remains unchanged.
+
+The benchmark varies chain depth (2–6), source quality and identifiers, with reversed
+document order and 24 distracting records per case. It measures this bounded family,
+not unrestricted language understanding or a general intelligence score. No phone
+latency claim is made from desktop/CI timing. Rules, existing graph provenance and
+retrieval/search caps still limit correctness outside these cases.

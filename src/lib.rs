@@ -28,6 +28,8 @@ pub mod deliberation;
 pub mod discovery;
 pub mod duyen_token;
 pub mod episodic;
+pub mod evidence_search;
+pub mod evidence_evaluation;
 pub mod evaluation;
 pub mod curriculum;
 pub mod four_matrix;

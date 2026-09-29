@@ -71,6 +71,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     public static native String nativeLearnedSemanticV61();
     public static native String nativeContinualV81();
     public static native String nativeAutonomousLoopV101();
+    public static native String nativeEvidenceV130();
     public static native long nativeCycleCount();
     public static native String nativeStatus();
     public static native boolean nativeSave(String path);
@@ -585,6 +586,18 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     refreshStatus();
                 });
             }, "bia-autonomous-loop-proof").start();
+            return;
+        }
+
+        if (text.equalsIgnoreCase("/evidence")) {
+            new Thread(() -> {
+                String report = nativeEvidenceV130();
+                runOnUiThread(() -> {
+                    lastReply = report;
+                    addBubble(report, false);
+                    refreshStatus();
+                });
+            }, "bia-evidence-proof").start();
             return;
         }
 

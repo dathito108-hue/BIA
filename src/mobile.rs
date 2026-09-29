@@ -77,7 +77,14 @@ impl OfflineMobileBia {
         let mut semantic_answer = self
             .intelligence
             .answer_scene(&self.bia.world, &semantic_scene);
-        if semantic_scene.query.is_some() && matches!(semantic_answer, OpenAnswer::Unknown) {
+        let mut evidence_limited = false;
+        if semantic_scene.query.as_ref().is_some_and(|q| q.kind == crate::semantic::QueryKind::Causal) {
+            let evidence = crate::evidence_search::CausalEvidenceSearch.search(
+                &self.intelligence, &self.bia.world, &self.knowledge, &semantic_scene, device,
+            );
+            semantic_answer = evidence.answer;
+            evidence_limited = evidence.budget_limited;
+        } else if semantic_scene.query.is_some() && matches!(semantic_answer, OpenAnswer::Unknown) {
             let mut loaded = 0usize;
             for hit in self.retriever.recall(&self.knowledge, text, 3) {
                 let _ = self
@@ -192,6 +199,9 @@ impl OfflineMobileBia {
                     );
                 }
                 LoopDecision::Answer => {}
+            }
+            if evidence_limited {
+                thought.push_str(" Phạm vi kiểm tra bằng chứng còn bị giới hạn bởi ngân sách thiết bị hoặc dữ liệu.");
             }
             thought
         } else if let Some(lesson) = teaching {

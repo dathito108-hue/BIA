@@ -553,6 +553,20 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeAutonomousLoopV101
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeEvidenceV130(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let report = crate::evidence_evaluation::run_evidence_evaluation();
+    java_string(&mut env, format!(
+        "V130 evidence: pass={}, cases={}, chains={}, conflicts={}, unchanged_memory={}, top3_baseline={}, elapsed_ms={}",
+        report.passed(), report.cases, report.chain_passes,
+        report.contradiction_passes, report.isolation_passes,
+        report.top_three_chain_passes, report.elapsed.as_millis()
+    ))
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
