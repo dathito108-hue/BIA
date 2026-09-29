@@ -267,6 +267,34 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeReasoningV15(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeGeneralizeV16(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let report = crate::run_v16_generalization_evaluation();
+    java_string(
+        &mut env,
+        format!(
+            "V16 generalization: pass={}, cases={}, long_chain={}/{}, distractor={}/{}, counterfactual={}/{}, reversal={}/{}, persistence={}/{}, accuracy={:.3}, elapsed_us={}",
+            report.passed(),
+            report.cases,
+            report.long_chain_passes,
+            report.cases,
+            report.distractor_passes,
+            report.cases,
+            report.counterfactual_passes,
+            report.cases,
+            report.reversal_passes,
+            report.cases,
+            report.persistence_passes,
+            report.cases,
+            report.accuracy(),
+            report.elapsed.as_micros()
+        ),
+    )
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
