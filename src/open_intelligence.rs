@@ -1,4 +1,7 @@
 use crate::abstraction::ConceptAbstraction;
+use crate::active_evidence::{ActiveEvidenceSeeker, EvidenceRequest};
+use crate::budget::DeviceState;
+use crate::calibration::SelfCalibration;
 use crate::autonomous_hypothesis::AutonomousHypothesisGenerator;
 use crate::competition::{CandidateHypothesis, CompetitionResult, HypothesisCompetition};
 use crate::discovery::ContextDiscovery;
@@ -8,7 +11,11 @@ use crate::hierarchy::HierarchicalAbstraction;
 use crate::induction::{InducedRelation, InductiveReasoner};
 use crate::knowledge_governor::{KnowledgeAssessment, KnowledgeGovernor};
 use crate::meta_rules::MetaRuleCompressor;
+use crate::metacognition::{CognitiveAssessment, MetacognitiveController};
 use crate::open_reasoning::{OpenAnswer, SemanticReasoner};
+use crate::recursive_deliberation::{RecursiveDeliberator, RecursiveResult};
+use crate::self_directed_compute::{ComputeRoute, SelfDirectedCompute};
+use crate::skill_transfer::CrossDomainTransfer;
 use crate::rules::RuleSynthesizer;
 use crate::semantic::SemanticScene;
 use crate::world::WorldGraph;
@@ -27,6 +34,12 @@ pub struct OpenIntelligence {
     hypotheses: AutonomousHypothesisGenerator,
     meta_rules: MetaRuleCompressor,
     governor: KnowledgeGovernor,
+    metacognition: MetacognitiveController,
+    calibration: SelfCalibration,
+    evidence: ActiveEvidenceSeeker,
+    recursive: RecursiveDeliberator,
+    compute: SelfDirectedCompute,
+    transfer: CrossDomainTransfer,
 }
 
 impl OpenIntelligence {
@@ -107,6 +120,58 @@ impl OpenIntelligence {
 
     pub fn compete(&self, candidates: &[CandidateHypothesis]) -> CompetitionResult {
         self.competition.choose(candidates)
+    }
+
+    pub fn assess_cognition(
+        &self,
+        support: f32,
+        opposition: f32,
+        path_len: usize,
+        evidence_count: usize,
+    ) -> CognitiveAssessment {
+        let raw = self
+            .metacognition
+            .assess(support, opposition, path_len, evidence_count);
+        CognitiveAssessment {
+            certainty: self.calibration.adjusted(raw.certainty),
+            ..raw
+        }
+    }
+
+    pub fn route_compute(
+        &self,
+        assessment: &CognitiveAssessment,
+        device: DeviceState,
+    ) -> ComputeRoute {
+        self.compute.route(assessment, device)
+    }
+
+    pub fn evidence_request(
+        &self,
+        target: u64,
+        assessment: &CognitiveAssessment,
+        missing_link: bool,
+    ) -> Option<EvidenceRequest> {
+        self.evidence.request(target, assessment, missing_link)
+    }
+
+    pub fn recursive_refine<F>(&self, initial: f32, refine: F) -> RecursiveResult
+    where
+        F: FnMut(usize, f32) -> f32,
+    {
+        self.recursive.run(initial, refine)
+    }
+
+    pub fn observe_calibration(&mut self, predicted_confidence: f32, correct: bool) {
+        self.calibration.observe(predicted_confidence, correct);
+    }
+
+    pub fn calibration_brier(&self) -> f32 {
+        self.calibration.brier_score()
+    }
+
+    pub fn transfer_engine(&self) -> &CrossDomainTransfer {
+        &self.transfer
     }
 
     pub fn analogy(&self) -> &AnalogicalReasoner {
