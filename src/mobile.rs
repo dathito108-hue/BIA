@@ -404,35 +404,3 @@ fn action_features(action: &DeviceAction) -> Vec<f32> {
 }
 
 
-fn open_answer_text(answer: &OpenAnswer) -> String {
-    match answer {
-        OpenAnswer::Supported { confidence, path } => format!(
-            "Có cơ sở nhân–quả để ủng hộ kết luận này. Độ tin cậy {:.0}%, chuỗi Duyên có {} mắt xích.",
-            confidence * 100.0,
-            path.len().saturating_sub(1)
-        ),
-        OpenAnswer::Opposed { confidence, path } => format!(
-            "Bằng chứng hiện tại nghiêng về phía phủ định. Độ tin cậy {:.0}%, chuỗi ức chế có {} mắt xích.",
-            confidence * 100.0,
-            path.len().saturating_sub(1)
-        ),
-        OpenAnswer::Contradicted { support, opposition } => format!(
-            "Tôi thấy mâu thuẫn thật trong các Duyên: ủng hộ {:.0}% và phản đối {:.0}%. Chưa nên kết luận một chiều.",
-            support * 100.0,
-            opposition * 100.0
-        ),
-        OpenAnswer::Counterfactual {
-            support_delta,
-            factual_support,
-            counterfactual_support,
-        } => format!(
-            "Nếu bỏ điều kiện đó, mức ủng hộ thay đổi {:.0} điểm phần trăm: từ {:.0}% xuống {:.0}%.",
-            support_delta * 100.0,
-            factual_support * 100.0,
-            counterfactual_support * 100.0
-        ),
-        OpenAnswer::Unknown => {
-            "Tôi chưa dựng được chuỗi Duyên đủ chắc từ dữ kiện hiện có.".to_string()
-        }
-    }
-}
