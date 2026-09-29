@@ -5,8 +5,11 @@ pub mod android_ffi;
 pub mod action;
 pub mod adaptation;
 pub mod budget;
+pub mod capability;
 pub mod core;
+pub mod dialogue;
 pub mod curriculum;
+pub mod goals;
 pub mod language;
 pub mod meaning;
 pub mod perception;
@@ -21,7 +24,10 @@ pub mod world;
 pub use action::{ActionDecision, ActionProposal, Authority, CuTranPolicy};
 pub use adaptation::{causal_credit, evaluate_delta, PromotionDecision, SkillDelta};
 pub use budget::{middle_way, Budget, DeviceState};
+pub use capability::{encode_action, infer_device_action, DeviceAction, DeviceActionKind};
 pub use core::{BiaDca, BiaDcaConfig};
+pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
+pub use goals::{Goal, GoalStack, GoalStatus};
 pub use curriculum::{score as score_curriculum, CurriculumDomain, CurriculumScore, TrialResult};
 pub use language::{LanguageIntent, VietnameseGate};
 pub use meaning::{Concept, MeaningFormation};
@@ -400,6 +406,55 @@ mod tests {
         let restored = BiaDca::from_snapshot(BiaDcaConfig::default(), snapshot);
         assert!(restored.world.node(808).is_some());
         assert_eq!(restored.memory.len(), 1);
+    }
+
+    #[test]
+    fn taught_memory_is_imprinted_without_global_retraining() {
+        let bia = BiaDca::new(BiaDcaConfig::default());
+        let mut app = OfflineMobileBia::new(bia);
+        let before = app.bia.memory.len();
+        let reply = app
+            .converse("Nhớ rằng sen là biểu tượng tôi đang nói tới", 10, device())
+            .expect("reply");
+        assert!(reply.text.contains("ghi nhận"));
+        assert!(app.bia.memory.len() > before);
+    }
+
+    #[test]
+    fn goal_is_retained_across_turns_in_runtime() {
+        let bia = BiaDca::new(BiaDcaConfig::default());
+        let mut app = OfflineMobileBia::new(bia);
+        app.converse("Mục tiêu: tìm tài liệu học Rust", 20, device())
+            .expect("goal reply");
+        assert_eq!(
+            app.goals.active().map(|g| g.description.as_str()),
+            Some("tìm tài liệu học Rust")
+        );
+        app.converse("tiếp tục", 21, device()).expect("follow-up");
+        assert!(app.dialogue.len() >= 4);
+    }
+
+    #[test]
+    fn device_action_is_structured_and_requires_ui_execution() {
+        let bia = BiaDca::new(BiaDcaConfig::default());
+        let mut app = OfflineMobileBia::new(bia);
+        let reply = app
+            .converse("Tìm web Phật giáo Trúc Lâm", 30, device())
+            .expect("reply");
+        let action = reply.pending_action.expect("pending action");
+        assert_eq!(action.kind, DeviceActionKind::SearchWeb);
+        assert!(action.payload.contains("Phật giáo"));
+    }
+
+    #[test]
+    fn action_outcome_becomes_experience() {
+        let bia = BiaDca::new(BiaDcaConfig::default());
+        let mut app = OfflineMobileBia::new(bia);
+        app.converse("Mở cài đặt", 40, device()).expect("reply");
+        let before = app.bia.memory.len();
+        app.resolve_pending_action(true, 41);
+        assert!(app.bia.memory.len() > before);
+        assert!(app.pending_action().is_none());
     }
 
 }

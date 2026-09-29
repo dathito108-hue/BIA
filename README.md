@@ -58,6 +58,21 @@ The goal is broad portability, not the physically impossible claim that identica
 
 ## Status
 
-The repository now includes a usable Android shell backed by the native Rust **BIA-DCA runtime**. Mobile V2 adds a redesigned offline chat interface, human-readable Vietnamese responses, native Dharma-memory save/restore across app restarts, live cognition status, and ARM64 APK CI. It is still an experimental intelligence architecture rather than a proven AGI.
+The repository now includes a usable Android shell backed by the native Rust **BIA-DCA runtime**. Mobile V2 adds a redesigned offline chat interface, human-readable Vietnamese responses, native Dharma-memory save/restore across app restarts, live cognition status, and ARM64 APK CI. It is still an experimental intelligence architecture rather than a proven AGI. Capability V3 adds bounded multi-turn dialogue context, explicit goals, user-taught local memory, structured Android actions with confirmation, and action-outcome learning.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
+
+
+## Capability V3 mobile commands
+
+The Android shell now recognizes a small, explicit set of useful capabilities while keeping authority separate from cognition:
+
+- `Nhớ rằng ...` / `Ghi nhớ ...` — imprint a local experiential memory.
+- `Mục tiêu: ...` — keep an active goal in the runtime.
+- `Tìm web ...` — propose opening an external web search.
+- `Mở YouTube` or `Mở https://...` — propose an external VIEW action.
+- `Mở cài đặt` — propose opening Android system settings.
+- `Mở ứng dụng <package.name>` — propose launching an installed package.
+- `Sao chép ...` — propose writing text to the clipboard.
+
+Every device action is surfaced to the Android UI for explicit confirmation. Success/failure is sent back into BIA and becomes experiential feedback.

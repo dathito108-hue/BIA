@@ -2,11 +2,18 @@ package com.bia.mobile;
 
 import android.app.Activity;
 import android.app.ActivityManager;
+import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -16,8 +23,11 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.File;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
     static {
@@ -37,6 +47,8 @@ public class MainActivity extends Activity {
     public static native String nativeStatus();
     public static native boolean nativeSave(String path);
     public static native boolean nativeLoad(String path);
+    public static native String nativePendingAction();
+    public static native void nativeResolveAction(boolean success, long timestamp);
 
     private static final int BG = Color.rgb(12, 18, 16);
     private static final int SURFACE = Color.rgb(24, 34, 30);
@@ -91,6 +103,11 @@ public class MainActivity extends Activity {
                 false
         );
 
+        addBubble(
+                "Bạn có thể thử: “Nhớ rằng…”, “Mục tiêu: …”, “Tìm web …”, “Mở YouTube”, “Mở cài đặt”, hoặc “Sao chép …”.",
+                false
+        );
+
         root.addView(buildComposer());
         setContentView(root);
         refreshStatus();
@@ -124,15 +141,13 @@ public class MainActivity extends Activity {
 
         LinearLayout labels = column();
         labels.setPadding(dp(14), 0, 0, 0);
-        TextView title = text("BIA", 24, TEXT, Typeface.BOLD);
-        TextView subtitle = text(
-                "Trí tuệ Duyên khởi • Offline Native",
+        labels.addView(text("BIA", 24, TEXT, Typeface.BOLD));
+        labels.addView(text(
+                "Trí tuệ Duyên khởi • Capability V3",
                 13,
                 MUTED,
                 Typeface.NORMAL
-        );
-        labels.addView(title);
-        labels.addView(subtitle);
+        ));
 
         header.addView(
                 labels,
@@ -163,8 +178,7 @@ public class MainActivity extends Activity {
         bg.setStroke(dp(1), Color.rgb(45, 64, 56));
         card.setBackground(bg);
 
-        TextView dot = text("●", 12, JADE, Typeface.BOLD);
-        card.addView(dot);
+        card.addView(text("●", 12, JADE, Typeface.BOLD));
 
         status = text("Đang khởi tạo...", 13, MUTED, Typeface.NORMAL);
         status.setPadding(dp(8), 0, 0, 0);
@@ -177,16 +191,7 @@ public class MainActivity extends Activity {
                 )
         );
 
-        TextView mode = text("TĨNH → QUÁN", 11, GOLD, Typeface.BOLD);
-        card.addView(mode);
-
-        LinearLayout.LayoutParams params =
-                new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT
-                );
-        params.setMargins(0, 0, 0, dp(4));
-        card.setLayoutParams(params);
+        card.addView(text("TĨNH → QUÁN → HÀNH", 11, GOLD, Typeface.BOLD));
         return card;
     }
 
@@ -199,7 +204,7 @@ public class MainActivity extends Activity {
         input.setTextColor(TEXT);
         input.setHintTextColor(Color.rgb(111, 128, 120));
         input.setTextSize(16f);
-        input.setHint("Nói điều bạn muốn BIA quan sát...");
+        input.setHint("Nói điều bạn muốn BIA hiểu hoặc làm...");
         input.setMinLines(1);
         input.setMaxLines(4);
         input.setPadding(dp(16), dp(12), dp(16), dp(12));
@@ -258,8 +263,94 @@ public class MainActivity extends Activity {
         );
 
         addBubble(reply, false);
+        handlePendingAction();
         nativeSave(memoryPath);
         refreshStatus();
+    }
+
+    private void handlePendingAction() {
+        String encoded = nativePendingAction();
+        if (encoded == null || encoded.isEmpty()) return;
+
+        String[] parts = encoded.split("\t", -1);
+        if (parts.length < 4) return;
+
+        String kind = parts[0];
+        String label = unescape(parts[1]);
+        String payload = unescape(parts[2]);
+
+        new AlertDialog.Builder(this)
+                .setTitle("BIA đề xuất hành động")
+                .setMessage(label + "\n\nChỉ thực thi khi bạn xác nhận.")
+                .setNegativeButton("Hủy", (dialog, which) -> {
+                    nativeResolveAction(false, SystemClock.elapsedRealtime());
+                    addBubble("Hành động đã được hủy. Tôi đã ghi nhận kết quả này.", false);
+                    nativeSave(memoryPath);
+                    refreshStatus();
+                })
+                .setPositiveButton("Thực thi", (dialog, which) -> {
+                    boolean success = executeAction(kind, payload);
+                    nativeResolveAction(success, SystemClock.elapsedRealtime());
+                    addBubble(
+                            success
+                                    ? "Hành động đã được thực thi và kết quả đã được huân tập."
+                                    : "Hành động không thực hiện được; tôi đã ghi nhận thất bại để điều chỉnh.",
+                            false
+                    );
+                    nativeSave(memoryPath);
+                    refreshStatus();
+                })
+                .show();
+    }
+
+    private boolean executeAction(String kind, String payload) {
+        try {
+            switch (kind) {
+                case "OPEN_SETTINGS":
+                    startActivity(new Intent(Settings.ACTION_SETTINGS));
+                    return true;
+
+                case "OPEN_URL":
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(payload)));
+                    return true;
+
+                case "SEARCH_WEB":
+                    String query = URLEncoder.encode(payload, StandardCharsets.UTF_8.name());
+                    startActivity(new Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse("https://www.google.com/search?q=" + query)
+                    ));
+                    return true;
+
+                case "LAUNCH_PACKAGE":
+                    Intent launch = getPackageManager().getLaunchIntentForPackage(payload);
+                    if (launch == null) {
+                        Toast.makeText(this, "Không tìm thấy ứng dụng: " + payload, Toast.LENGTH_SHORT).show();
+                        return false;
+                    }
+                    startActivity(launch);
+                    return true;
+
+                case "CLIPBOARD_WRITE":
+                    ClipboardManager clipboard =
+                            (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                    clipboard.setPrimaryClip(ClipData.newPlainText("BIA", payload));
+                    return true;
+
+                default:
+                    return false;
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Không thể thực thi hành động.", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+    }
+
+    private String unescape(String value) {
+        return value
+                .replace("\\n", "\n")
+                .replace("\\t", "\t")
+                .replace("\\\\", "\\");
     }
 
     private void refreshStatus() {
@@ -307,7 +398,6 @@ public class MainActivity extends Activity {
                 dp(5)
         );
         messages.addView(holder, holderParams);
-
         scroll.post(() -> scroll.fullScroll(View.FOCUS_DOWN));
     }
 
@@ -323,12 +413,7 @@ public class MainActivity extends Activity {
         return v;
     }
 
-    private TextView text(
-            String value,
-            float size,
-            int color,
-            int style
-    ) {
+    private TextView text(String value, float size, int color, int style) {
         TextView view = new TextView(this);
         view.setText(value);
         view.setTextSize(size);
@@ -345,8 +430,6 @@ public class MainActivity extends Activity {
     }
 
     private int dp(int value) {
-        return Math.round(
-                value * getResources().getDisplayMetrics().density
-        );
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 }
