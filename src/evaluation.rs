@@ -382,3 +382,150 @@ pub fn run_v15_reasoning_evaluation() -> V15ReasoningReport {
         elapsed: start.elapsed(),
     }
 }
+
+
+#[derive(Clone, Debug)]
+pub struct V16GeneralizationReport {
+    pub cases: usize,
+    pub long_chain_passes: usize,
+    pub distractor_passes: usize,
+    pub counterfactual_passes: usize,
+    pub reversal_passes: usize,
+    pub persistence_passes: usize,
+    pub elapsed: Duration,
+}
+
+impl V16GeneralizationReport {
+    pub fn passed(&self) -> bool {
+        self.long_chain_passes == self.cases
+            && self.distractor_passes == self.cases
+            && self.counterfactual_passes == self.cases
+            && self.reversal_passes == self.cases
+            && self.persistence_passes == self.cases
+    }
+
+    pub fn accuracy(&self) -> f32 {
+        let denom = (self.cases * 5).max(1) as f32;
+        (self.long_chain_passes
+            + self.distractor_passes
+            + self.counterfactual_passes
+            + self.reversal_passes
+            + self.persistence_passes) as f32
+            / denom
+    }
+}
+
+pub fn run_v16_generalization_evaluation() -> V16GeneralizationReport {
+    use crate::reasoning::CausalReasoner;
+    use crate::types::{Relation, RelationKind};
+    use crate::world::WorldGraph;
+
+    let start = Instant::now();
+    let cases = 128usize;
+    let mut long_chain = 0usize;
+    let mut distractor = 0usize;
+    let mut counterfactual = 0usize;
+    let mut reversal = 0usize;
+    let mut persistence = 0usize;
+
+    for case in 0..cases {
+        let base = case as u64 * 1000;
+        let nodes = [base + 1, base + 2, base + 3, base + 4, base + 5, base + 6];
+
+        let mut world = WorldGraph::new(128, 256);
+        for i in 0..5 {
+            world.relate(Relation {
+                from: nodes[i],
+                to: nodes[i + 1],
+                kind: if i % 2 == 0 { RelationKind::Causes } else { RelationKind::Enables },
+                strength: 0.95 - i as f32 * 0.03,
+                confidence: 0.96 - i as f32 * 0.02,
+            });
+        }
+
+        // Distractors with strong-looking but irrelevant edges.
+        for d in 0..20u64 {
+            world.relate(Relation {
+                from: base + 100 + d,
+                to: base + 200 + d,
+                kind: RelationKind::Causes,
+                strength: 1.0,
+                confidence: 1.0,
+            });
+        }
+
+        let reasoner = CausalReasoner::new(6, 16);
+        let target = nodes[5];
+        let factual = reasoner.infer(&world, target);
+
+        if factual
+            .best_path
+            .as_ref()
+            .is_some_and(|p| p.nodes == nodes.to_vec() && !p.inhibited)
+            && factual.support > 0.5
+        {
+            long_chain += 1;
+        }
+
+        if factual
+            .best_path
+            .as_ref()
+            .is_some_and(|p| p.nodes.iter().all(|n| *n < base + 100))
+        {
+            distractor += 1;
+        }
+
+        let cf = reasoner.counterfactual_without(&world, target, nodes[2]);
+        if cf.support_delta > 0.20 && cf.counterfactual.support < cf.factual.support {
+            counterfactual += 1;
+        }
+
+        world.relate(Relation {
+            from: base + 900,
+            to: target,
+            kind: RelationKind::Inhibits,
+            strength: 1.0,
+            confidence: 1.0,
+        });
+        world.relate(Relation {
+            from: base + 901,
+            to: target,
+            kind: RelationKind::Inhibits,
+            strength: 1.0,
+            confidence: 1.0,
+        });
+        let reversed = reasoner.infer(&world, target);
+        if reversed.opposition > reversed.support && reversed.contradicted {
+            reversal += 1;
+        }
+
+        // Simulate later-turn unrelated memory/world additions.
+        let before_support = reversed.support;
+        let before_opp = reversed.opposition;
+        for t in 0..16u64 {
+            world.relate(Relation {
+                from: base + 500 + t,
+                to: base + 600 + t,
+                kind: RelationKind::Similar,
+                strength: 0.9,
+                confidence: 0.9,
+            });
+        }
+        let after = reasoner.infer(&world, target);
+        if (after.support - before_support).abs() < 1e-6
+            && (after.opposition - before_opp).abs() < 1e-6
+        {
+            persistence += 1;
+        }
+    }
+
+    V16GeneralizationReport {
+        cases,
+        long_chain_passes: long_chain,
+        distractor_passes: distractor,
+        counterfactual_passes: counterfactual,
+        reversal_passes: reversal,
+        persistence_passes: persistence,
+        elapsed: start.elapsed(),
+    }
+}

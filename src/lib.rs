@@ -40,7 +40,7 @@ pub use continuity::{decode_continuity, encode_continuity, ContinuityState};
 pub use core::{BiaDca, BiaDcaConfig};
 pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
-pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport};
+pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport};
 pub use four_matrix::{
     adaptive_realm_weights, classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
     FourMatrixOutput, PerspectiveProjection, RealmBand, AGGREGATES,
@@ -57,7 +57,7 @@ pub use planning::{DeepQuan, Plan, PlanStep};
 pub use memory::{Seed, SeedMemory};
 pub use mobile::{MobileReply, OfflineMobileBia};
 pub use persistence::{decode, encode, read_file, write_atomic, DharmaSnapshot, PersistenceError};
-pub use reasoning::{CausalPath, CausalReasoner, ReasoningVerdict};
+pub use reasoning::{CausalPath, CausalReasoner, CounterfactualVerdict, ReasoningVerdict};
 pub use runtime::{CapacityTier, RuntimeProfile, RuntimeTarget};
 pub use token_stream::{InstantToken, InstantTokenEmitter};
 pub use types::*;
@@ -796,6 +796,31 @@ mod tests {
     #[test]
     fn v15_reasoning_quality_suite_passes() {
         let report = run_v15_reasoning_evaluation();
+        assert!(report.passed(), "report={report:?}");
+        assert_eq!(report.accuracy(), 1.0);
+    }
+
+    #[test]
+    fn counterfactual_removal_weakens_required_chain() {
+        let mut world = WorldGraph::new(32, 64);
+        for (from, to) in [(1,2),(2,3),(3,4),(4,5)] {
+            world.relate(Relation {
+                from,
+                to,
+                kind: RelationKind::Causes,
+                strength: 0.95,
+                confidence: 0.95,
+            });
+        }
+        let reasoner = CausalReasoner::new(6, 16);
+        let cf = reasoner.counterfactual_without(&world, 5, 3);
+        assert!(cf.support_delta > 0.2);
+        assert!(cf.counterfactual.support < cf.factual.support);
+    }
+
+    #[test]
+    fn v16_generalization_suite_passes() {
+        let report = run_v16_generalization_evaluation();
         assert!(report.passed(), "report={report:?}");
         assert_eq!(report.accuracy(), 1.0);
     }
