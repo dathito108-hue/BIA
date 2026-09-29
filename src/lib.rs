@@ -1,5 +1,7 @@
-#![forbid(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
 
+#[cfg(target_os = "android")]
+pub mod android_ffi;
 pub mod action;
 pub mod adaptation;
 pub mod budget;
