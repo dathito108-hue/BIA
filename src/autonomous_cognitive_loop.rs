@@ -5,6 +5,16 @@ use crate::open_reasoning::OpenAnswer;
 
 const MAX_LOOP_PASSES: usize = 4;
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct CognitiveLoopInput {
+    pub target: u64,
+    pub support: f32,
+    pub opposition: f32,
+    pub path_len: usize,
+    pub evidence_count: usize,
+    pub uncertainty: f32,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoopDecision {
     Answer,
