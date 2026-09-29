@@ -73,11 +73,14 @@ impl ContinualSemanticLearner {
             if let Some(c) = self.concepts.iter_mut().find(|c| c.id == *id) {
                 let similarity = ((c.vector.cosine(anchor) + 1.0) * 0.5).clamp(0.0, 1.0);
                 let drift = 1.0 - similarity;
-                if drift > max_drift.clamp(0.0, 1.0) {
-                    c.vector.blend(anchor, 0.35);
-                    c.stability = ((c.vector.cosine(anchor) + 1.0) * 0.5).clamp(0.0, 1.0);
-                    restored += 1;
-                }
+                let rate = if drift > max_drift.clamp(0.0, 1.0) {
+                    0.35
+                } else {
+                    0.05
+                };
+                c.vector.blend(anchor, rate);
+                c.stability = ((c.vector.cosine(anchor) + 1.0) * 0.5).clamp(0.0, 1.0);
+                restored += 1;
             }
         }
         restored
