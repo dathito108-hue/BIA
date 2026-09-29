@@ -1,141 +1,113 @@
-# BIA-KSANA-1 Architecture Contract
+# BIA-DCA Architecture Contract
 
-## 1. Philosophical inspiration → computational abstraction
+## 1. Definition
 
-BIA uses Buddhist philosophical models as design metaphors and structural inspiration, not as scientific proof.
+BIA-DCA (Dharma Cognitive Architecture) treats intelligence as a continuously renewed process of **world contact, conditioned interpretation, contemplation, choice, consequence and experiential consolidation**.
 
-| Buddhist concept | BIA abstraction |
+It is deliberately not specified as a neural-network family. Numerical functions are allowed as tools, but no dense weight matrix, token stream, attention operator, SSM recurrence or other existing model primitive is the architectural center.
+
+## 2. Vietnamese Buddhist design inspirations
+
+| Concept | Computational role |
 |---|---|
-| momentary conditioned experience | discrete recurrent cognitive moment (Ksana) |
-| five aggregates | five functional sub-states in each moment |
-| dependent arising | sparse condition-dependent update graph |
-| six sense bases | modality and internal-state routing |
-| mind-stream / continuity | recurrent state transition without permanent self token |
-| store consciousness / seeds | sparse long-term trace memory |
-| afflicted manas / self-grasping | explicit revisable self-model, confidence bounded |
-| middle way | runtime resource controller balancing quality and cost |
+| Duyên khởi | relations become active only when relevant conditions co-occur |
+| Ngũ uẩn | separate form, relevance/feeling, recognition, formation and awareness roles |
+| Lục căn/lục trần | interchangeable perception/action gates |
+| Sát-na / tâm lưu | cognition is an event stream, not a permanent self-state |
+| Vô ngã | self-model is optional, revisable metadata, never the identity of the core |
+| Huân tập / chủng tử | experience leaves bounded reusable traces |
+| Trung đạo | quality/latency/energy/memory trade-off is an architectural controller |
+| Trúc Lâm / nhập thế | intelligence is completed by perception → understanding → action → consequence |
 
-## 2. State
+These mappings are engineering abstractions, not assertions that Buddhist doctrine is equivalent to computer science.
 
-At time t the model carries:
+## 3. Tam Thiên world model
+
+BIA represents the currently known world in three scalable levels:
+
+- **Tiểu Thiên**: immediate phenomena and local objects.
+- **Trung Thiên**: situations, environments, apps, conversations, tasks.
+- **Đại Thiên**: durable systems, concepts, social/world structures and long-horizon context.
+
+The implementation stores bounded `Phenomenon` nodes and explicit `Relation` edges. The active Cảnh is retrieved from this graph; the entire world never needs to reside in the active cognitive moment.
+
+## 4. Cognitive matrix
+
+The "matrix" is logical and sparse rather than a mandatory dense tensor.
 
 ```
-S_t = {
-  santati: H_t,
-  alaya_query: M_t,
-  self_model: Q_t,
-  budget: B_t
+M_t = {
+  canh: active phenomena,
+  duyen: active causal/context relations,
+  tho: salience/urgency,
+  tuong: recognized meanings,
+  thuc: current integrated awareness event,
+  quan: hypotheses under examination,
+  tri: evaluated understanding,
+  hanh: candidate intention
 }
 ```
 
-The state is not treated as a permanent identity. It is a transient computational support for the next event.
+Only active entries exist. This keeps working memory bounded.
 
-Each cognitive moment computes five sub-states:
-
-```
-R_t = f_r(x_t)                    // rupa
-V_t = f_v(R_t, H_{t-1})           // vedana
-N_t = f_n(R_t, H_{t-1})           // sanna
-K_t = f_k(N_t, V_t, H_{t-1})      // sankhara
-C_t = f_c(R_t, V_t, N_t, K_t)     // vinnana
-```
-
-Then sparse conditional integration:
+## 5. One cognitive cycle
 
 ```
-G_t = TopK(conditions(x_t, H_{t-1}, M_t), k)
-H_t = decay(H_{t-1}) + sum_{e in G_t} gate_e * update_e(C_t, H_{t-1})
+1. CANH  : select relevant phenomena
+2. XUC   : connect input gate with current world state
+3. THO   : estimate salience/urgency/novelty
+4. TUONG : recognize meanings from world + seed memory
+5. THUC  : form the current cognitive event
+6. QUAN  : activate causal conditions and competing hypotheses
+7. TRI   : reinforce/discount hypotheses using evidence and outcomes
+8. HANH  : select or abstain from an intention
+9. QUA   : observe outcome
+10.HUAN  : consolidate useful experience as seeds/relations
 ```
 
-Only a small subset of conditional edges is active per moment.
+Abstention is a valid result. Under resource or safety pressure the system may enter **Tĩnh** and perform no deliberative action.
 
-## 3. No permanent self center
+## 6. Duyên graph
 
-BIA deliberately separates useful self-modeling from the core recurrent state:
+A relation contains:
+- source and target phenomenon ids;
+- relation kind (causes/enables/inhibits/contains/similar/follows/goal-relevant);
+- strength;
+- confidence.
 
-```
-Q_t = revise(Q_{t-1}, evidence_t, confidence_t)
-```
+Reasoning is graph activation plus bounded hypothesis revision. There is no architectural requirement to generate hidden reasoning tokens.
 
-Q may encode body state, capabilities, user-assigned role, active goals, and tool permissions. It must be revisable and may be discarded/reconstructed.
+## 7. Chủng tử memory
 
-## 4. Alaya Seed Memory
+A seed stores:
+- a compact experience signature;
+- learned meaning/action category;
+- strength;
+- utility;
+- repetitions;
+- last-seen time.
 
-Long-term memory is modeled as sparse traces:
+Repeated similar experiences merge. When capacity is full, weak/low-utility traces are evicted. This gives learning without requiring global retraining.
 
-```
-seed_i = {
-  key,
-  value,
-  strength,
-  recency,
-  context_signature,
-  action_credit
-}
-```
+## 8. Trung Đạo compute controller
 
-Retrieval is bounded:
+Device state includes battery, thermal pressure, load and available memory. Task state includes importance and uncertainty. The budgeter chooses:
 
-```
-M_t = TopKSeed(similarity(context_t, key_i) * strength_i, k_m)
-```
+- **Tĩnh**: event monitoring only;
+- **Nhanh**: one shallow contemplation;
+- **Thường**: several contemplation cycles;
+- **Sâu**: bounded deeper reasoning.
 
-Learning changes strengths and representations rather than replaying an unlimited context window.
+All capacities remain explicit and bounded.
 
-## 5. Mobile complexity target
+## 9. Safety/action contract
 
-For hidden width d, active graph degree k, and retrieved memories m:
+Intentions carry expected benefit, harm, reversibility and confidence. A production action layer must separately enforce permissions and irreversible-action approval; the cognitive core cannot grant itself external authority.
 
-- recurrent state update: O(d)
-- active conditional routing: O(k d), k << d
-- memory retrieval: bounded top-k/indexed search
-- working memory: O(d + m d)
-- sequence processing: streaming; no O(n²) attention requirement
+## 10. Portability contract
 
-## 6. Initial deployment profiles
+The architecture must compile without AI-framework dependencies and expose capacity limits. Device-specific acceleration may optimize primitives but may not redefine cognition. A BIA instance on a weak device and one on a powerful machine share the same world, memory, relation and cognitive-moment formats.
 
-### BIA-S
-- d = 256
-- 8 process blocks
-- active edges per block <= 4
-- int8 state / int4 weights target
-- intended for continuous mobile assistant use
+## 11. What BIA-DCA is not
 
-### BIA-M
-- d = 512
-- 16 process blocks
-- active edges per block <= 8
-- int8 state / int4 weights target
-- intended for stronger local reasoning
-
-### BIA-L Mobile
-- d = 768
-- 24 process blocks
-- aggressive sparse activation
-- int8 state / int4 weights target
-- intended for high-memory phones
-
-Exact parameter counts are not frozen at M0; they depend on projection sharing, vocabulary/adapters, and memory modules.
-
-## 7. Training objective
-
-A future trainable BIA combines:
-- next-event / next-symbol prediction;
-- latent state prediction;
-- contrastive recognition;
-- action-value / outcome prediction;
-- memory write/read consistency;
-- self-model calibration;
-- energy-aware sparse-routing penalty.
-
-The architecture does not require a Transformer teacher at inference time.
-
-## 8. M0 invariants
-
-1. No Transformer attention block.
-2. No imported prior-project model core.
-3. No global permanent self embedding.
-4. Cognitive state is recurrent and bounded.
-5. Conditional computation is sparse by contract.
-6. Long-term memory is external to the fixed recurrent state.
-7. Every production implementation must expose hard limits for RAM, compute and retrieval count.
+It is not complete AGI merely because the runtime exists. General intelligence requires learned world knowledge, perception/language grounding, robust planning, action feedback, evaluation and extensive training/experience. This repository establishes the canonical architecture on which those capabilities can be built without changing BIA into an existing model family.
