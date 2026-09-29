@@ -60,6 +60,25 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeChat(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeImmediateToken(
+    mut env: JNIEnv,
+    _class: JClass,
+    input: JString,
+) -> jstring {
+    let input = env
+        .get_string(&input)
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let token = runtime()
+        .lock()
+        .ok()
+        .and_then(|app| app.immediate_tokens(&input).into_iter().next())
+        .map(|t| t.text)
+        .unwrap_or_default();
+    java_string(&mut env, token)
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativePendingAction(
     mut env: JNIEnv,
     _class: JClass,
