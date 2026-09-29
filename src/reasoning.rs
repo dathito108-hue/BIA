@@ -150,7 +150,7 @@ impl CausalReasoner {
                         && causal(r.kind)
                         && removed_node.is_none_or(|x| r.from != x && r.to != x)
                 });
-                !has_parent || path.nodes.len() >= self.max_depth + 1
+                !has_parent || path.nodes.len() > self.max_depth
             })
             .cloned()
             .collect();
