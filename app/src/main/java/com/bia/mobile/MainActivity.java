@@ -66,6 +66,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     public static native String nativeDeepIntelligenceV21();
     public static native String nativeEmergentV25();
     public static native String nativeAutonomyV31();
+    public static native String nativeDeliberationV37();
     public static native long nativeCycleCount();
     public static native String nativeStatus();
     public static native boolean nativeSave(String path);
@@ -520,6 +521,18 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                     refreshStatus();
                 });
             }, "bia-autonomous-knowledge-proof").start();
+            return;
+        }
+
+        if (text.equalsIgnoreCase("/world") || text.equalsIgnoreCase("world")) {
+            new Thread(() -> {
+                String report = nativeDeliberationV37();
+                runOnUiThread(() -> {
+                    lastReply = report;
+                    addBubble(report, false);
+                    refreshStatus();
+                });
+            }, "bia-world-model-proof").start();
             return;
         }
 
