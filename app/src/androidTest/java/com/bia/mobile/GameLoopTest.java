@@ -15,9 +15,13 @@ public final class GameLoopTest extends InstrumentationTestCase {
         ui=getInstrumentation().getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);
         android.accessibilityservice.AccessibilityServiceInfo info=ui.getServiceInfo();
         info.flags|=android.accessibilityservice.AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;ui.setServiceInfo(info);
-        waitFor(()->GameAccessibilityService.instance!=null,10000,"accessibility service");
         Intent setup=new Intent(getInstrumentation().getTargetContext(),GameSetupActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         GameSetupActivity activity=(GameSetupActivity)getInstrumentation().startActivitySync(setup);
+        // am instrument force-stops the target process; bind only after that restart.
+        shell("settings delete secure enabled_accessibility_services");
+        shell("settings put secure enabled_accessibility_services com.bia.mobile/.GameAccessibilityService");
+        shell("settings put secure accessibility_enabled 1");
+        waitFor(()->GameAccessibilityService.instance!=null,20000,"accessibility service");
         getInstrumentation().runOnMainSync(()->activity.modes.setSelection(1));
         click("2. Đồng ý đọc màn hình và mở game",5000);
         long end=SystemClock.elapsedRealtime()+15000;
@@ -43,6 +47,11 @@ public final class GameLoopTest extends InstrumentationTestCase {
         assertEquals("no gestures after leaving target",stopped,service.completed);
         click("DỪNG",5000);waitFor(()->GameCaptureService.instance==null,5000,"session stop");
         assertFalse("permission not armed after stop",service.armed);
+    }
+    void shell(String command)throws Exception {
+        try(java.io.InputStream in=new android.os.ParcelFileDescriptor.AutoCloseInputStream(ui.executeShellCommand(command))){
+            byte[] buffer=new byte[1024];while(in.read(buffer)!=-1){}
+        }
     }
     interface Check {boolean yes();}
     void waitFor(Check check,long timeout,String label)throws Exception{

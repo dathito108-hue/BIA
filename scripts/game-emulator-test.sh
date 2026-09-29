@@ -2,8 +2,6 @@
 set -euo pipefail
 mkdir -p game-evidence
 gradle :app:installDebug :app:installDebugAndroidTest --console=plain
-adb shell settings put secure enabled_accessibility_services com.bia.mobile/.GameAccessibilityService
-adb shell settings put secure accessibility_enabled 1
 adb shell input keyevent KEYCODE_WAKEUP
 adb shell wm dismiss-keyguard
 adb logcat -c
