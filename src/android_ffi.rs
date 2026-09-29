@@ -463,6 +463,36 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeMaxIntelligenceV45
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeLearnedSemanticV61(
+    mut env: JNIEnv,
+    _class: JClass,
+) -> jstring {
+    let report = crate::run_v61_learned_semantic_evaluation();
+    java_string(
+        &mut env,
+        format!(
+            "V61 semantic: pass={}, cases={}, embedding={}/{}, latent_memory={}/{}, relation={}/{}, retrieval={}/{}, compression={}/{}, hybrid={}/{}, accuracy={:.3}, elapsed_us={}",
+            report.passed(),
+            report.cases,
+            report.embedding_passes,
+            report.cases,
+            report.latent_memory_passes,
+            report.cases,
+            report.relation_passes,
+            report.cases,
+            report.vector_retrieval_passes,
+            report.cases,
+            report.compression_passes,
+            report.cases,
+            report.hybrid_passes,
+            report.cases,
+            report.accuracy(),
+            report.elapsed.as_micros()
+        ),
+    )
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeCycleCount(
     _env: JNIEnv,
     _class: JClass,
