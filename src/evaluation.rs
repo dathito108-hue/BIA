@@ -216,7 +216,7 @@ pub fn run_v14_stress(iterations: usize) -> V14StressReport {
         }
 
         let state = decoder.state();
-        if state.iter().all(|v| *v >= i16::MIN && *v <= i16::MAX) {
+        if state.iter().all(|v| *v != i16::MIN && *v != i16::MAX) {
             finite += 1;
         }
 
