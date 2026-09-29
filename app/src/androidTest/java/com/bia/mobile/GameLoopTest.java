@@ -35,7 +35,11 @@ public final class GameLoopTest extends InstrumentationTestCase {
             Thread.sleep(150);
         }
         waitFor(()->GameCaptureService.instance!=null && GameCaptureService.instance.latest!=null && GameTrainingActivity.visible,10000,"projection frames in arena");
-        Thread.sleep(600);click("Bật 5 phút",5000);
+        // First immersive launch presents an Android-owned tutorial window.
+        clickOnce("Got it");
+        waitFor(()->{clickOnce("Got it");return GameAccessibilityService.instance.targetForeground();},10000,"arena is the active window");
+        waitFor(()->GameCaptureService.instance.latest!=null && SystemClock.elapsedRealtime()-GameCaptureService.instance.latest.time<350,5000,"fresh arena frame");
+        click("Bật 5 phút",5000);
         waitFor(()->GameTrainingActivity.hits>=3 && GameTrainingActivity.maxPointers>=2,15000,"arena hits and delivered multitouch");
         GameAccessibilityService service=GameAccessibilityService.instance;
         assertTrue("native decisions dispatched",service.completed>=1);

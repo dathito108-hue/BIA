@@ -23,7 +23,7 @@ root hay dịch vụ AI. Không được hiểu là BIA đã biết chơi tốt 
 2. Chọn **BIA — sân tập đa chạm**, chế độ **MOBA** để thử lần đầu.
 3. Bấm **Bật BIA Game trong Trợ năng**, bật đúng dịch vụ được ghi tên.
 4. Trở lại BIA, bấm **Đồng ý đọc màn hình và mở game** và xác nhận hộp thoại Android.
-5. Sân tập có sẵn cấu hình; trên thanh nổi bấm **Bật 5 phút**. Quan sát số trúng và
+5. Nếu Android hiện hướng dẫn toàn màn hình, đóng hướng dẫn trước. Sân tập có sẵn cấu hình; trên thanh nổi bấm **Bật 5 phút**. Quan sát số trúng và
    số chạm đồng thời tăng. Bấm **DỪNG** để kết thúc cả phiên đọc màn hình.
 6. Sau khi sân tập hoạt động, chọn game đã cài trong danh sách. Mở chế độ luyện tập
    của game trước khi cấp thao tác. BIA không tự vào trận hoặc điều hướng menu.
