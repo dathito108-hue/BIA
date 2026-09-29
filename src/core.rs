@@ -1,5 +1,6 @@
 use crate::budget::{middle_way, Budget, DeviceState};
 use crate::meaning::MeaningFormation;
+use crate::inference_matrix::{f32_to_q15, MatrixDecision, MatrixSignal, TamThienMatrix};
 use crate::memory::SeedMemory;
 use crate::persistence::DharmaSnapshot;
 use crate::types::{CognitiveMoment, Hypothesis, Intention, Phenomenon, Relation, RelationKind};
@@ -34,6 +35,7 @@ pub struct BiaDca {
     active_causes: usize,
     cycle: u64,
     previous_observation: Option<Phenomenon>,
+    matrix: TamThienMatrix,
 }
 
 impl BiaDca {
@@ -45,6 +47,7 @@ impl BiaDca {
             active_causes: cfg.active_causes,
             cycle: 0,
             previous_observation: None,
+            matrix: TamThienMatrix::default(),
         }
     }
 
@@ -56,6 +59,7 @@ impl BiaDca {
             active_causes: cfg.active_causes,
             cycle: 0,
             previous_observation: None,
+            matrix: TamThienMatrix::default(),
         }
     }
 
@@ -98,6 +102,7 @@ impl BiaDca {
             .world
             .causes_for(focus.id, self.active_causes.min(budget.world_limit));
         let memories = self.memory.recall(&focus, budget.memory_limit);
+        let matrix = self.matrix_decision(&focus, &causes, &memories);
 
         let mut recognition: Vec<u32> = vec![emergent_concept];
         for p in &active {
@@ -111,11 +116,23 @@ impl BiaDca {
             }
         }
 
-        let feeling =
-            (focus.salience * (0.5 + 0.5 * importance) - uncertainty * 0.35).clamp(-1.0, 1.0);
+        let matrix_confidence =
+            crate::inference_matrix::q15_to_f32(matrix.confidence_q15);
+        let feeling = (
+            focus.salience * (0.45 + 0.45 * importance)
+                + matrix_confidence * 0.20
+                - uncertainty * 0.30
+        )
+        .clamp(-1.0, 1.0);
         let mut hypotheses = Vec::new();
         for c in &causes {
-            let score = (c.strength * c.confidence * focus.confidence).clamp(0.0, 1.0);
+            let lane_affinity =
+                matrix.dai[(c.from as usize ^ c.to as usize) & 15].max(0) as f32 / 32767.0;
+            let score = (
+                c.strength * c.confidence * focus.confidence * 0.85
+                    + lane_affinity * 0.15
+            )
+            .clamp(0.0, 1.0);
             hypotheses.push(Hypothesis {
                 source: c.from,
                 target: c.to,
@@ -145,6 +162,46 @@ impl BiaDca {
             mode: budget.mode,
             uncertainty,
         }
+    }
+
+    pub fn fast_matrix(&self, focus: &Phenomenon) -> MatrixDecision {
+        self.matrix_decision(focus, &[], &[])
+    }
+
+    fn matrix_decision(
+        &self,
+        focus: &Phenomenon,
+        causes: &[Relation],
+        memories: &[crate::memory::Seed],
+    ) -> MatrixDecision {
+        let mut signals = Vec::with_capacity(32);
+        for (i, value) in focus.features.iter().take(16).enumerate() {
+            signals.push(MatrixSignal {
+                lane: i as u8,
+                value_q15: f32_to_q15(*value),
+            });
+        }
+        signals.push(MatrixSignal {
+            lane: 12,
+            value_q15: f32_to_q15(focus.salience),
+        });
+        signals.push(MatrixSignal {
+            lane: 13,
+            value_q15: f32_to_q15(focus.confidence),
+        });
+        for cause in causes.iter().take(8) {
+            signals.push(MatrixSignal {
+                lane: ((cause.from ^ cause.to) & 15) as u8,
+                value_q15: f32_to_q15(cause.strength * cause.confidence),
+            });
+        }
+        for seed in memories.iter().take(6) {
+            signals.push(MatrixSignal {
+                lane: (seed.meaning & 15) as u8,
+                value_q15: f32_to_q15(seed.strength * seed.utility.max(0.0)),
+            });
+        }
+        self.matrix.infer(&signals)
     }
 
     pub fn experience(&mut self, p: &Phenomenon, meaning: u32, benefit: f32, harm: f32) {

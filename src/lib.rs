@@ -12,6 +12,7 @@ pub mod core;
 pub mod dialogue;
 pub mod curriculum;
 pub mod goals;
+pub mod inference_matrix;
 pub mod knowledge;
 pub mod language;
 pub mod meaning;
@@ -22,6 +23,7 @@ pub mod memory;
 pub mod mobile;
 pub mod persistence;
 pub mod runtime;
+pub mod token_stream;
 pub mod types;
 pub mod world;
 
@@ -35,6 +37,7 @@ pub use core::{BiaDca, BiaDcaConfig};
 pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
 pub use goals::{Goal, GoalStack, GoalStatus};
 pub use curriculum::{score as score_curriculum, CurriculumDomain, CurriculumScore, TrialResult};
+pub use inference_matrix::{f32_to_q15, q15_to_f32, MatrixDecision, MatrixLevel, MatrixSignal, TamThienMatrix, LANES};
 pub use knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
 pub use language::{LanguageIntent, VietnameseGate};
 pub use meaning::{Concept, MeaningFormation};
@@ -45,6 +48,7 @@ pub use memory::{Seed, SeedMemory};
 pub use mobile::{MobileReply, OfflineMobileBia};
 pub use persistence::{decode, encode, read_file, write_atomic, DharmaSnapshot, PersistenceError};
 pub use runtime::{CapacityTier, RuntimeProfile, RuntimeTarget};
+pub use token_stream::{InstantToken, InstantTokenEmitter};
 pub use types::*;
 pub use world::WorldGraph;
 
@@ -542,6 +546,50 @@ mod tests {
             restored.knowledge.recent().map(|r| r.source.as_str()),
             Some("shared")
         );
+    }
+
+    #[test]
+    fn tam_thien_matrix_is_bounded_and_deterministic() {
+        let matrix = TamThienMatrix::default();
+        let signals = vec![
+            MatrixSignal { lane: 1, value_q15: 28000 },
+            MatrixSignal { lane: 1, value_q15: 4000 },
+            MatrixSignal { lane: 5, value_q15: 12000 },
+        ];
+        let a = matrix.infer(&signals);
+        let b = matrix.infer(&signals);
+        assert_eq!(a, b);
+        assert!(a.winner < LANES as u8);
+        assert_eq!(a.tieu.len(), LANES);
+        assert_eq!(a.trung.len(), LANES);
+        assert_eq!(a.dai.len(), LANES);
+    }
+
+    #[test]
+    fn instant_token_path_is_bounded_for_long_input() {
+        let emitter = InstantTokenEmitter::default();
+        let long = "abc ".repeat(10_000);
+        let signals = emitter.signals_from_text(&long);
+        assert!(signals.len() <= LANES);
+        let tokens = emitter.emit_immediate("làm tiếp");
+        assert!(tokens.len() <= 1);
+    }
+
+    #[test]
+    fn core_fast_matrix_runs_without_world_scan() {
+        let bia = BiaDca::new(BiaDcaConfig::default());
+        let focus = Phenomenon::new(
+            1,
+            WorldLevel::TieuThien,
+            SenseGate::Mind,
+            7,
+            vec![0.9, 0.1, 0.7, 0.2],
+            0.95,
+            0.8,
+            1,
+        );
+        let decision = bia.fast_matrix(&focus);
+        assert!(decision.winner < LANES as u8);
     }
 
 }

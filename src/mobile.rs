@@ -8,6 +8,7 @@ use crate::dialogue::{DialogueContext, DialogueTurn, Speaker};
 use crate::goals::{GoalStack, GoalStatus};
 use crate::knowledge::{KnowledgeLedger, KnowledgeRecord, ProvenanceKind};
 use crate::language::VietnameseGate;
+use crate::token_stream::{InstantToken, InstantTokenEmitter};
 use crate::planner::decompose_goal;
 use crate::types::{CognitiveMoment, Phenomenon, SenseGate, WorldLevel};
 
@@ -25,6 +26,7 @@ pub struct OfflineMobileBia {
     pub dialogue: DialogueContext,
     pub goals: GoalStack,
     pub knowledge: KnowledgeLedger,
+    pub tokens: InstantTokenEmitter,
     queue: ActionQueue,
 }
 
@@ -37,6 +39,7 @@ impl OfflineMobileBia {
             dialogue: DialogueContext::new(24),
             goals: GoalStack::new(16),
             knowledge: KnowledgeLedger::new(96),
+            tokens: InstantTokenEmitter::default(),
             queue: ActionQueue::new(12),
         }
     }
@@ -175,6 +178,19 @@ impl OfflineMobileBia {
             count += 1;
         }
         count
+    }
+
+    pub fn immediate_tokens(&self, input: &str) -> Vec<InstantToken> {
+        self.tokens.emit_immediate(input)
+    }
+
+    pub fn response_tokens(
+        &self,
+        input: &str,
+        moment: &CognitiveMoment,
+        response: &str,
+    ) -> Vec<InstantToken> {
+        self.tokens.emit_response(input, moment, response)
     }
 
     pub fn pending_action(&self) -> Option<&DeviceAction> {
