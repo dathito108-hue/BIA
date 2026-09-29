@@ -13,6 +13,7 @@ use crate::open_intelligence::OpenIntelligence;
 use crate::open_reasoning::OpenAnswer;
 use crate::semantic::concept_id;
 use crate::autonomous_cognitive_loop::LoopDecision;
+use crate::idle_cognition::IdleCognitiveTask;
 use crate::token_stream::{InstantToken, InstantTokenEmitter};
 use crate::planner::decompose_goal;
 use crate::retrieval::SemanticRetriever;
@@ -292,6 +293,11 @@ impl OfflineMobileBia {
 
     pub fn pending_action(&self) -> Option<&DeviceAction> {
         self.queue.front()
+    }
+
+    pub fn idle_cognitive_task(&mut self, device: DeviceState) -> IdleCognitiveTask {
+        self.intelligence
+            .choose_idle_cognition(device, !self.queue.is_empty())
     }
 
     pub fn resolve_pending_action(&mut self, success: bool, timestamp: u64) {
