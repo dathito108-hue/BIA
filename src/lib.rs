@@ -10,9 +10,12 @@ pub mod adaptation;
 pub mod budget;
 pub mod capability;
 pub mod continuity;
+pub mod competition;
 pub mod core;
 pub mod dialogue;
+pub mod discovery;
 pub mod duyen_token;
+pub mod episodic;
 pub mod evaluation;
 pub mod curriculum;
 pub mod four_matrix;
@@ -31,6 +34,7 @@ pub mod open_intelligence;
 pub mod open_reasoning;
 pub mod persistence;
 pub mod reasoning;
+pub mod rules;
 pub mod retrieval;
 pub mod semantic;
 pub mod runtime;
@@ -46,10 +50,13 @@ pub use adaptation::{causal_credit, evaluate_delta, PromotionDecision, SkillDelt
 pub use budget::{middle_way, Budget, DeviceState};
 pub use capability::{action_for_goal, encode_action, infer_device_action, DeviceAction, DeviceActionKind};
 pub use continuity::{decode_continuity, encode_continuity, ContinuityState};
+pub use competition::{CandidateHypothesis, CompetitionResult, HypothesisCompetition};
 pub use core::{BiaDca, BiaDcaConfig};
 pub use dialogue::{DialogueContext, DialogueTurn, Speaker};
+pub use discovery::{ContextDiscovery, DiscoveredSimilarity};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
-pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport};
+pub use episodic::{Episode, EpisodeClause, EpisodicMemory};
+pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, run_v25_emergent_intelligence_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport, V25EmergentIntelligenceReport};
 pub use four_matrix::{
     adaptive_realm_weights, classify_realm, encode_text_aggregates, AggregateVector, FourMatrixKernel,
     FourMatrixOutput, PerspectiveProjection, RealmBand, AGGREGATES,
@@ -70,6 +77,7 @@ pub use open_intelligence::OpenIntelligence;
 pub use open_reasoning::{OpenAnswer, SemanticReasoner};
 pub use persistence::{decode, encode, read_file, write_atomic, DharmaSnapshot, PersistenceError};
 pub use reasoning::{CausalPath, CausalReasoner, CounterfactualVerdict, ReasoningVerdict};
+pub use rules::{RuleSynthesizer, SynthesizedRule};
 pub use retrieval::{KnowledgeHit, SemanticRetriever};
 pub use semantic::{concept_id, QueryKind, SemanticClause, SemanticEntity, SemanticQuery, SemanticScene, VietnameseSemanticParser};
 pub use runtime::{CapacityTier, RuntimeProfile, RuntimeTarget};
@@ -974,6 +982,121 @@ mod tests {
     #[test]
     fn v21_deep_intelligence_suite_passes() {
         let report = run_v21_deep_intelligence_evaluation();
+        assert!(report.passed(), "report={report:?}");
+        assert_eq!(report.accuracy(), 1.0);
+    }
+
+    #[test]
+    fn episodic_memory_is_bounded() {
+        let parser = VietnameseSemanticParser;
+        let mut memory = EpisodicMemory::default();
+        for i in 0..200u64 {
+            let scene = parser.parse(&format!("a{i} gây ra b{i}."));
+            memory.observe(&scene, i, 0.5);
+        }
+        assert!(memory.len() <= 128);
+    }
+
+    #[test]
+    fn context_discovery_finds_shared_causal_role() {
+        let mut world = WorldGraph::new(32, 64);
+        for id in 1..=4u64 {
+            world.upsert(Phenomenon::new(
+                id,
+                WorldLevel::TrungThien,
+                SenseGate::Mind,
+                id as u32,
+                vec![0.5],
+                0.9,
+                0.7,
+                1,
+            ));
+        }
+        for (from, to) in [(1, 3), (2, 3), (1, 4), (2, 4)] {
+            world.relate(Relation {
+                from,
+                to,
+                kind: RelationKind::Causes,
+                strength: 0.9,
+                confidence: 0.9,
+            });
+        }
+        assert!(ContextDiscovery::default().apply(&mut world) > 0);
+        assert!(world.edges().iter().any(|e| {
+            e.kind == RelationKind::Similar
+                && ((e.from == 1 && e.to == 2) || (e.from == 2 && e.to == 1))
+        }));
+    }
+
+    #[test]
+    fn rule_synthesis_transfers_two_step_pattern() {
+        let parser = VietnameseSemanticParser;
+        let mut memory = EpisodicMemory::default();
+        for text in [
+            "a1 gây ra b1. b1 cho phép c1.",
+            "a2 gây ra b2. b2 cho phép c2.",
+        ] {
+            let scene = parser.parse(text);
+            memory.observe(&scene, 1, 0.8);
+        }
+        let mut synth = RuleSynthesizer::default();
+        assert!(synth.synthesize(&memory) > 0);
+
+        let mut world = WorldGraph::new(16, 32);
+        world.relate(Relation {
+            from: 10,
+            to: 11,
+            kind: RelationKind::Causes,
+            strength: 0.9,
+            confidence: 0.9,
+        });
+        world.relate(Relation {
+            from: 11,
+            to: 12,
+            kind: RelationKind::Enables,
+            strength: 0.9,
+            confidence: 0.9,
+        });
+        assert!(synth.apply(&mut world) > 0);
+        assert!(world.edges().iter().any(|e| {
+            e.from == 10 && e.to == 12 && e.kind == RelationKind::Causes
+        }));
+    }
+
+    #[test]
+    fn hypothesis_competition_rejects_near_equal_opposites() {
+        let engine = HypothesisCompetition;
+        let result = engine.choose(&[
+            CandidateHypothesis {
+                relation: Relation {
+                    from: 1,
+                    to: 2,
+                    kind: RelationKind::Causes,
+                    strength: 0.95,
+                    confidence: 0.95,
+                },
+                source: "support",
+                evidence: 2,
+            },
+            CandidateHypothesis {
+                relation: Relation {
+                    from: 1,
+                    to: 2,
+                    kind: RelationKind::Inhibits,
+                    strength: 0.94,
+                    confidence: 0.95,
+                },
+                source: "oppose",
+                evidence: 2,
+            },
+        ]);
+        assert!(result.contradicted);
+        assert!(result.winner.is_none());
+    }
+
+    #[test]
+    fn v25_emergent_intelligence_suite_passes() {
+        let report = run_v25_emergent_intelligence_evaluation();
         assert!(report.passed(), "report={report:?}");
         assert_eq!(report.accuracy(), 1.0);
     }
