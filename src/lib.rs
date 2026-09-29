@@ -1,16 +1,24 @@
 #![forbid(unsafe_code)]
 
+pub mod action;
 pub mod budget;
 pub mod core;
+pub mod language;
 pub mod meaning;
+pub mod perception;
+pub mod planning;
 pub mod memory;
 pub mod persistence;
 pub mod types;
 pub mod world;
 
+pub use action::{ActionDecision, ActionProposal, Authority, CuTranPolicy};
 pub use budget::{middle_way, Budget, DeviceState};
 pub use core::{BiaDca, BiaDcaConfig};
+pub use language::{LanguageIntent, VietnameseGate};
 pub use meaning::{Concept, MeaningFormation};
+pub use perception::{MultiCanh, PerceptPacket};
+pub use planning::{DeepQuan, Plan, PlanStep};
 pub use memory::{Seed, SeedMemory};
 pub use persistence::{decode, encode, read_file, write_atomic, DharmaSnapshot, PersistenceError};
 pub use types::*;
@@ -219,4 +227,72 @@ mod tests {
             Err(PersistenceError::ChecksumMismatch)
         ));
     }
+    #[test]
+    fn vietnamese_gate_produces_phenomena_and_intent() {
+        let gate = VietnameseGate;
+        let ps = gate.perceive("Mở ứng dụng và tìm nhạc", 10);
+        assert!(!ps.is_empty());
+        let intent = gate.infer_intent("Mở ứng dụng");
+        assert_ne!(intent.verb, 0);
+    }
+
+    #[test]
+    fn multicanh_binds_modalities() {
+        let binder = MultiCanh;
+        let p = binder.bind(
+            &[
+                PerceptPacket {
+                    gate: SenseGate::Sight,
+                    source: 1,
+                    values: vec![1.0, 0.2],
+                    confidence: 0.9,
+                    timestamp: 4,
+                },
+                PerceptPacket {
+                    gate: SenseGate::Sound,
+                    source: 2,
+                    values: vec![0.4, 0.7],
+                    confidence: 0.8,
+                    timestamp: 5,
+                },
+            ],
+            99,
+        );
+        assert_eq!(p.id, 99);
+        assert_eq!(p.level, WorldLevel::TrungThien);
+    }
+
+    #[test]
+    fn deep_quan_builds_bounded_plan() {
+        let q = DeepQuan::new(4, 3);
+        let rel = Relation {
+            from: 1,
+            to: 2,
+            kind: RelationKind::Enables,
+            strength: 0.9,
+            confidence: 0.9,
+        };
+        let plan = q.plan(7, Some(2), &[rel], 0.2);
+        assert!(!plan.steps.is_empty());
+        assert!(plan.steps.len() <= 4);
+    }
+
+    #[test]
+    fn cutran_denies_unauthorized_irreversible_action() {
+        let p = ActionProposal {
+            step: PlanStep {
+                action: 1,
+                target: None,
+                confidence: 0.9,
+                reversible: false,
+            },
+            authority: Authority::Irreversible,
+            rationale_confidence: 0.9,
+        };
+        assert!(matches!(
+            CuTranPolicy::default().evaluate(p),
+            ActionDecision::Denied(_)
+        ));
+    }
+
 }
