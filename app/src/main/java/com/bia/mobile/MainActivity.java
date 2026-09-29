@@ -164,6 +164,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         Button dex = compactButton("DEX: pool thật và chuẩn bị swap");
         dex.setOnClickListener(v -> startActivity(new Intent(this, DexActivity.class)));
         root.addView(dex);
+        Button solana = compactButton("Solana: ví và giao dịch mainnet");
+        solana.setOnClickListener(v -> startActivity(new Intent(this, SolanaActivity.class)));
+        root.addView(solana);
 
         scroll = new ScrollView(this);
         scroll.setFillViewport(true);
