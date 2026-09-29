@@ -12,6 +12,7 @@ use crate::language::VietnameseGate;
 use crate::open_reasoning::{OpenAnswer, SemanticReasoner};
 use crate::token_stream::{InstantToken, InstantTokenEmitter};
 use crate::planner::decompose_goal;
+use crate::retrieval::SemanticRetriever;
 use crate::types::{CognitiveMoment, Phenomenon, SenseGate, WorldLevel};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -31,6 +32,7 @@ pub struct OfflineMobileBia {
     pub tokens: InstantTokenEmitter,
     pub decoder: DuyenTokenDecoder,
     pub semantic: SemanticReasoner,
+    pub retriever: SemanticRetriever,
     queue: ActionQueue,
 }
 
@@ -46,6 +48,7 @@ impl OfflineMobileBia {
             tokens: InstantTokenEmitter::default(),
             decoder: DuyenTokenDecoder::default(),
             semantic: SemanticReasoner::default(),
+            retriever: SemanticRetriever,
             queue: ActionQueue::new(12),
         }
     }
@@ -65,9 +68,20 @@ impl OfflineMobileBia {
         let semantic_scene = self
             .semantic
             .ingest(&mut self.bia.world, text, timestamp);
-        let semantic_answer = self
+        let mut semantic_answer = self
             .semantic
             .answer_scene(&self.bia.world, &semantic_scene);
+        if semantic_scene.query.is_some() && matches!(semantic_answer, OpenAnswer::Unknown) {
+            let hits = self.retriever.recall(&self.knowledge, text, 3);
+            for hit in hits {
+                let _ = self
+                    .semantic
+                    .ingest(&mut self.bia.world, &hit.record.excerpt, timestamp);
+            }
+            semantic_answer = self
+                .semantic
+                .answer_scene(&self.bia.world, &semantic_scene);
+        }
 
         if let Some(goal) = extract_goal(text) {
             let id = stable_id(goal, timestamp);
@@ -187,6 +201,7 @@ impl OfflineMobileBia {
             confidence: confidence.clamp(0.0, 1.0),
         });
         let _ = self.decoder.learn_text(&excerpt);
+        let _ = self.semantic.ingest(&mut self.bia.world, &excerpt, timestamp);
 
         let phenomena = self.language.perceive(&excerpt, timestamp);
         let mut count = 0usize;
