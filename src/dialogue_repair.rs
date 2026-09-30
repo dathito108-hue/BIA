@@ -14,7 +14,7 @@ pub struct DialogueRepair {
 pub fn detect(input: &str, current: Option<&str>) -> Option<DialogueRepair> {
     if input.chars().count()>1024 { return None; }
     let s=normalize(input);
-    let t=s.trim();
+    let t=s.trim().trim_end_matches(['?','!','.','。','！','？']).trim();
     if t.is_empty() { return None; }
 
     if let Some(rest)=t.strip_prefix("khong phai ") {
