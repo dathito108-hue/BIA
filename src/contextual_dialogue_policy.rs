@@ -104,10 +104,7 @@ fn action_order(action: DialogueAction) -> u8 {
 }
 
 fn weave_overlap(weave: &DuyenWeave) -> f32 {
-    let text = format!("{weave:?}").to_lowercase();
-    let markers = ["overlap", "chong", "shared", "common", "hai chieu", "conflict"];
-    let hits = markers.iter().filter(|m| text.contains(**m)).count();
-    (hits as f32 / 3.0).min(1.0)
+    weave.overlap_score
 }
 
 #[cfg(test)]
