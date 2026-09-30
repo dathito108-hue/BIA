@@ -448,15 +448,16 @@ impl IntegratedCognition {
         }
         let mut answer = reasoner.answer_scene(&world, &scene);
         let (support, opposition, depth, evidence) = match &answer {
-            OpenAnswer::Supported { confidence, path } => {
+            OpenAnswer::Supported { confidence, path, .. } => {
                 (*confidence, 0.0, path.len(), path.len().saturating_sub(1))
             }
-            OpenAnswer::Opposed { confidence, path } => {
+            OpenAnswer::Opposed { confidence, path, .. } => {
                 (0.0, *confidence, path.len(), path.len().saturating_sub(1))
             }
             OpenAnswer::Contradicted {
                 support,
                 opposition,
+                ..
             } => (*support, *opposition, 2, 2),
             OpenAnswer::Counterfactual {
                 factual_support,
