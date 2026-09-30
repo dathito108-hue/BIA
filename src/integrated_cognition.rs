@@ -135,6 +135,9 @@ impl IntegratedCognition {
     fn conversation(&mut self,input:&str)->Option<String>{
         use crate::conversation_language::{understand,Frame};
         let normalized = normalize(input).trim().trim_end_matches(['?','!','.']).to_string();
+        if let Some(plan) = crate::dynamic_dialogue_intent::DynamicDialoguePlan::parse(input) {
+            return Some(self.execute_dynamic_dialogue_plan(plan));
+        }
         if let Some(act) = crate::conversational_implicature::parse(input) {
             use crate::conversational_implicature::ConversationAct;
             match act {
@@ -640,6 +643,72 @@ impl IntegratedCognition {
             (true, false) => Some(true),
             (false, true) => Some(false),
             _ => None,
+        }
+    }
+
+    fn execute_dynamic_dialogue_plan(
+        &mut self,
+        plan: crate::dynamic_dialogue_intent::DynamicDialoguePlan,
+    ) -> String {
+        use crate::dynamic_dialogue_intent::DynamicIntent;
+
+        let Some(q)=self.last_question.clone() else {
+            return "Chưa có mạch hội thoại hiện tại để ghép các ý định này.".into();
+        };
+
+        let new_only=plan.contains(DynamicIntent::NewOnly);
+        let doubt=plan.contains(DynamicIntent::Doubt);
+        let expand=plan.contains(DynamicIntent::Expand);
+        let acknowledge=plan.contains(DynamicIntent::Acknowledge);
+        let confirm=plan.contains(DynamicIntent::Confirm);
+
+        let mut deep_review=None;
+        if plan.wants_deep_review() {
+            deep_review=Some(self.answer_styled(
+                &q,
+                crate::expression_style::ExpressionStyle::Deep,
+            ));
+        }
+
+        if new_only {
+            let delta=self.response_delta();
+            if doubt && delta.starts_with("Chưa có bằng chứng mới") {
+                return format!("Tôi đã kiểm tra lại; {delta}");
+            }
+            return delta;
+        }
+
+        let mut parts=Vec::new();
+        if acknowledge {
+            parts.push("Đã hiểu.".to_string());
+        }
+
+        if doubt {
+            let deep=deep_review.unwrap_or_else(|| {
+                self.answer_styled(&q,crate::expression_style::ExpressionStyle::Deep)
+            });
+            parts.push(format!(
+                "Tôi kiểm tra lại mà không tăng độ chắc chỉ vì bị hỏi lại. {deep}"
+            ));
+            self.last_source_snapshot=self.relation_source_snapshot(&q);
+        } else if expand {
+            let deep=deep_review.unwrap_or_else(|| {
+                self.answer_styled(&q,crate::expression_style::ExpressionStyle::Deep)
+            });
+            parts.push(format!("Mở rộng thêm từ cùng mạch bằng chứng: {deep}"));
+            self.last_source_snapshot=self.relation_source_snapshot(&q);
+        } else if confirm {
+            let brief=self.answer_styled(
+                &q,
+                crate::expression_style::ExpressionStyle::Brief,
+            );
+            parts.push(format!("Nếu bạn đang xác nhận kết luận vừa rồi: {brief}"));
+        }
+
+        if parts.is_empty() {
+            "Tôi đã giữ các ý định hội thoại, nhưng chưa có phần trả lời mới cần phát ra.".into()
+        } else {
+            parts.join(" ")
         }
     }
 
