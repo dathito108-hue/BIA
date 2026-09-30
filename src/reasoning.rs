@@ -16,6 +16,7 @@ pub struct ReasoningVerdict {
     pub confidence: f32,
     pub contradicted: bool,
     pub best_path: Option<CausalPath>,
+    pub paths: Vec<CausalPath>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -66,6 +67,7 @@ impl CausalReasoner {
         let mut support = 0.0_f32;
         let mut opposition = 0.0_f32;
         let mut best_path: Option<CausalPath> = None;
+        let mut paths: Vec<CausalPath> = Vec::new();
         for _ in 0..self.max_depth {
             let mut next = Vec::new();
             for path in &frontier {
@@ -99,8 +101,11 @@ impl CausalReasoner {
                             support = support.max(score);
                         }
                         if best_path.as_ref().is_none_or(|old| score > old.score) {
-                            best_path = Some(candidate);
+                            best_path = Some(candidate.clone());
                         }
+                        paths.push(candidate);
+                        paths.sort_by(score_desc);
+                        paths.truncate(self.beam);
                     } else {
                         next.push(candidate);
                         next.sort_by(score_desc);
@@ -126,6 +131,7 @@ impl CausalReasoner {
             confidence,
             contradicted,
             best_path,
+            paths,
         }
     }
 
@@ -266,6 +272,10 @@ impl CausalReasoner {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
+        let mut paths = scored_paths.to_vec();
+        paths.sort_by(score_desc);
+        paths.truncate(self.beam);
+
         ReasoningVerdict {
             target,
             support,
@@ -273,6 +283,7 @@ impl CausalReasoner {
             confidence,
             contradicted,
             best_path,
+            paths,
         }
     }
 
