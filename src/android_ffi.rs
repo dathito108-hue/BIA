@@ -901,3 +901,9 @@ pub extern "system" fn Java_com_bia_mobile_TradingNative_quality(
     }else{"Chờ ít nhất 21 báo giá thật; chưa đủ bằng chứng".into()};
     java_string(&mut env,value)
 }
+
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_ProductNative_compile(mut env: JNIEnv, _class: JClass, spec: JString) -> jstring {
+    let value=env.get_string(&spec).map(|s|s.to_string_lossy().into_owned()).unwrap_or_default();
+    java_string(&mut env,crate::product_studio::compile_wire(&value))
+}
