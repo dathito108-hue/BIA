@@ -165,40 +165,40 @@ impl IntegratedCognition {
                 DialogueThreadMove::ExplainCause
                 | DialogueThreadMove::GroundEvidence
                 | DialogueThreadMove::Continue => {
-                    let Some(q) = self.last_question.clone() else {
-                        return None;
-                    };
-                    self.dialogue_goal.advance(ImplicitDialogueGoal::Explore);
-                    let deep = self.answer_styled(
-                        &q,
-                        crate::expression_style::ExpressionStyle::Deep,
-                    );
-                    let prefix = match thread_move {
-                        DialogueThreadMove::ExplainCause => "Mở rộng theo nhánh nhân/quả từ câu vừa rồi",
-                        DialogueThreadMove::GroundEvidence => "Kiểm tra lại theo bằng chứng của câu vừa rồi",
-                        DialogueThreadMove::Continue => "Tiếp tục đúng mạch quan hệ vừa rồi",
-                        _ => unreachable!(),
-                    };
-                    return Some(format!("{prefix}: {deep}"));
+                    if let Some(q) = self.last_question.clone() {
+                        self.dialogue_goal.advance(ImplicitDialogueGoal::Explore);
+                        let deep = self.answer_styled(
+                            &q,
+                            crate::expression_style::ExpressionStyle::Deep,
+                        );
+                        let prefix = match thread_move {
+                            DialogueThreadMove::ExplainCause => "Mở rộng theo nhánh nhân/quả từ câu vừa rồi",
+                            DialogueThreadMove::GroundEvidence => "Kiểm tra lại theo bằng chứng của câu vừa rồi",
+                            DialogueThreadMove::Continue => "Tiếp tục đúng mạch quan hệ vừa rồi",
+                            _ => unreachable!(),
+                        };
+                        return Some(format!("{prefix}: {deep}"));
+                    }
                 }
                 DialogueThreadMove::Return => {
-                    let Some(q) = self.continuity.previous().map(|turn| turn.question.clone())
+                    if let Some(q) = self
+                        .continuity
+                        .previous()
+                        .map(|turn| turn.question.clone())
                         .or_else(|| self.last_question.clone())
-                    else {
-                        return None;
-                    };
-                    return Some(self.answer_styled(
-                        &q,
-                        crate::expression_style::ExpressionStyle::Standard,
-                    ));
+                    {
+                        return Some(self.answer_styled(
+                            &q,
+                            crate::expression_style::ExpressionStyle::Standard,
+                        ));
+                    }
                 }
                 DialogueThreadMove::Clarify => {
-                    let Some(q) = self.last_question.clone() else {
-                        return None;
-                    };
-                    return Some(format!(
-                        "Tôi đang giữ mạch “{q}”. Bạn muốn làm rõ nguyên nhân, kết quả hay bằng chứng?"
-                    ));
+                    if let Some(q) = self.last_question.clone() {
+                        return Some(format!(
+                            "Tôi đang giữ mạch “{q}”. Bạn muốn làm rõ nguyên nhân, kết quả hay bằng chứng?"
+                        ));
+                    }
                 }
                 DialogueThreadMove::Compare | DialogueThreadMove::Counterfactual => {}
             }
