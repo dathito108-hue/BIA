@@ -907,3 +907,11 @@ pub extern "system" fn Java_com_bia_mobile_ProductNative_compile(mut env: JNIEnv
     let value=env.get_string(&spec).map(|s|s.to_string_lossy().into_owned()).unwrap_or_default();
     java_string(&mut env,crate::product_studio::compile_wire(&value))
 }
+
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_ProductNative_compatibility(mut env: JNIEnv, _class: JClass, before: JString, after: JString) -> jstring {
+    let a=env.get_string(&before).map(|s|s.to_string_lossy().into_owned()).unwrap_or_default();
+    let b=env.get_string(&after).map(|s|s.to_string_lossy().into_owned()).unwrap_or_default();
+    let result=crate::product_studio::Spec::parse(&a).and_then(|a|crate::product_studio::Spec::parse(&b).and_then(|b|crate::product_studio::compatible(&a,&b)));
+    java_string(&mut env,match result{Ok(s)=>format!("OK: {s}"),Err(s)=>format!("CHẶN: {s}")})
+}
