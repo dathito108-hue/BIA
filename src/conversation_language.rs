@@ -5,8 +5,12 @@ pub enum Frame { Alternative {subject:bool, entity:String}, Question(String), Re
 pub fn understand(input:&str)->Option<Frame>{
  if input.chars().count()>1024{return Some(Frame::Reply("Câu quá dài; hãy chia thành từng ý dưới 1.024 ký tự."))}
  let normalized=normalize(input);let mut s=normalized.split_whitespace().collect::<Vec<_>>().join(" ");
- for prefix in ["bia oi, ","bia oi ","bia, ","ban oi, ","cho minh hoi, ","cho minh hoi ","minh muon hoi ","toi dang thac mac ","theo ban, ","theo ban "] {
-  if let Some(rest)=s.strip_prefix(prefix){s=rest.to_string();break}
+ for _ in 0..3 {
+  let mut changed=false;
+  for prefix in ["bia oi, ","bia oi ","bia, ","ban oi, ","cho minh hoi, ","cho minh hoi ","minh muon hoi ","toi dang thac mac ","theo ban, ","theo ban "] {
+   if let Some(rest)=s.strip_prefix(prefix){s=rest.to_string();changed=true;break}
+  }
+  if !changed {break}
  }
  let mut bare_owned=s.trim_end_matches(['?','!','.']).trim().to_string();
  for suffix in [" dung khong"," phai khong"," nhi"," nhe"," a"," vay"] {
