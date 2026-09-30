@@ -40,7 +40,7 @@ pub fn detect(input: &str, current: Option<&str>) -> Option<DialogueRepair> {
     }
 
     if ["ban hieu sai","hieu sai roi","khong dung y toi","sai y roi"]
-        .contains(&t) {
+        .iter().any(|p| t.starts_with(p)) {
         return Some(DialogueRepair{
             kind:RepairKind::Clarify,
             original:current.unwrap_or("").to_string(),
