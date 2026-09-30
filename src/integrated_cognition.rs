@@ -403,10 +403,18 @@ impl IntegratedCognition {
     }
 
     fn answer(&mut self, question: &str) -> String {
-        self.answer_styled(question, crate::expression_style::ExpressionStyle::Standard)
+        self.answer_internal(question, None)
     }
 
     fn answer_styled(&mut self, question: &str, style: crate::expression_style::ExpressionStyle) -> String {
+        self.answer_internal(question, Some(style))
+    }
+
+    fn answer_internal(
+        &mut self,
+        question: &str,
+        requested_style: Option<crate::expression_style::ExpressionStyle>,
+    ) -> String {
         let mut question = question.to_string();
         for prefix in ["no ", "dieu do "] {
             if let Some(rest) = question.strip_prefix(prefix) {
@@ -490,7 +498,13 @@ impl IntegratedCognition {
                 if parsed.clauses.iter().take(8).any(|clause|path.windows(2).any(|pair|pair[0]==clause.subject.id&&pair[1]==clause.object.id)) {self.last_evidence.push(source.name.clone());}
             }
         }
-        let generated = GenerativeCognition.render_with_style(&answer, 1.0 - review.final_confidence, &weave, style);
+        let uncertainty = 1.0 - review.final_confidence;
+        let style = requested_style.unwrap_or_else(|| {
+            crate::adaptive_expression::AdaptiveExpressionSelector
+                .choose(&answer, &weave, uncertainty)
+                .style
+        });
+        let generated = GenerativeCognition.render_with_style(&answer, uncertainty, &weave, style);
         let mut text=format!("Về quan hệ giữa “{}” và “{}”: {}",query.subject.text,query.object.text,generated.text);
         if style != crate::expression_style::ExpressionStyle::Brief {
             if let OpenAnswer::Supported{path,..}|OpenAnswer::Opposed{path,..}=&answer {
