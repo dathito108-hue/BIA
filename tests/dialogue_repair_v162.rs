@@ -7,7 +7,7 @@ fn repairs_explicit_misunderstanding_without_inventing_a_new_fact() {
     c.handle("Mưa có gây ra đường trơn không?");
     let r=c.handle("Bạn hiểu sai rồi").expect("repair");
     assert!(r.contains("điểm lệch"),"{r}");
-    let follow=c.handle("Ý tôi là hỏi nguyên nhân của đường trơn").expect("clarify");
+    let follow=c.handle("Không phải đường ướt").expect("repair");
     assert!(follow.contains("sửa mạch hiểu"),"{follow}");
 }
 
