@@ -58,6 +58,7 @@ pub struct IntegratedCognition {
     last_evidence: Vec<String>,
     last_source_snapshot: Vec<(String, u64)>,
     dialogue_goal: crate::dialogue_goal_state::DialogueGoalState,
+    grounding: crate::dialogue_grounding::GroundingState,
     bindings: Vec<(String, crate::capability::DeviceAction)>,
     execution_failures: Vec<String>,
 }
@@ -191,6 +192,36 @@ impl IntegratedCognition {
                 }
             }
         }
+        if let Some(move_)=crate::dialogue_grounding::parse(input, self.last_question.as_deref()) {
+            use crate::dialogue_grounding::GroundingMove;
+            match move_ {
+                GroundingMove::CorrectRelation { question } => {
+                    self.grounding.note_repair();
+                    return Some(format!(
+                        "Hiểu rồi — tôi sửa mạch theo ý bạn. {}",
+                        self.answer(&question)
+                    ));
+                }
+                GroundingMove::ReplaceSubject { rejected, replacement } => {
+                    return Some(self.apply_grounding_entity_repair(
+                        &rejected,
+                        &replacement,
+                        true,
+                    ));
+                }
+                GroundingMove::ReplaceObject { rejected, replacement } => {
+                    return Some(self.apply_grounding_entity_repair(
+                        &rejected,
+                        &replacement,
+                        false,
+                    ));
+                }
+                GroundingMove::Clarify { prompt } => {
+                    self.grounding.note_unresolved();
+                    return Some(prompt);
+                }
+            }
+        }
         if let Some(move_) = crate::contextual_pragmatics::parse(input) {
             use crate::contextual_pragmatics::PragmaticMove;
             match move_ {
@@ -198,6 +229,7 @@ impl IntegratedCognition {
                     self.last_question = None;
                     self.topic = None;
                     self.dialogue_goal.clear_active();
+                    self.grounding.clear_unresolved();
                     return Some(format!(
                         "Được, chuyển sang chủ đề “{topic}”. Mạch quan hệ trước vẫn được giữ trong lịch sử để bạn có thể quay lại khi cần."
                     ));
@@ -740,6 +772,45 @@ impl IntegratedCognition {
         format!("{prefix}, kết luận hiện tại: {brief}")
     }
 
+    fn apply_grounding_entity_repair(
+        &mut self,
+        rejected: &str,
+        replacement: &str,
+        subject_role: bool,
+    ) -> String {
+        let Some(corrected) = self
+            .continuity
+            .correct_last_entity(replacement, rejected)
+        else {
+            self.grounding.note_unresolved();
+            return format!(
+                "Tôi chưa thể sửa “{rejected}” thành “{replacement}” vì nó không khớp rõ với quan hệ hiện tại."
+            );
+        };
+
+        let scene = VietnameseSemanticParser.parse(&corrected);
+        let Some(query) = scene.query else {
+            self.grounding.note_unresolved();
+            return "Tôi đã nhận ra yêu cầu sửa nhưng chưa dựng được quan hệ mới; hãy nói lại câu đầy đủ.".into();
+        };
+
+        self.grounding.note_repair();
+        self.last_question = Some(corrected.clone());
+        self.topic = Some(query.subject.text.clone());
+        self.dialogue_goal.clear_active();
+        self.dialogue_goal.bind_relation(&corrected);
+        let reply = self.answer_styled(
+            &corrected,
+            crate::expression_style::ExpressionStyle::Standard,
+        );
+        self.last_source_snapshot = self.relation_source_snapshot(&corrected);
+
+        let role = if subject_role { "nguyên nhân" } else { "kết quả" };
+        format!(
+            "Hiểu rồi — tôi sửa {role} từ “{rejected}” thành “{replacement}”. {reply}"
+        )
+    }
+
     fn execute_dynamic_dialogue_plan(
         &mut self,
         plan: crate::dynamic_dialogue_intent::DynamicDialoguePlan,
@@ -921,6 +992,7 @@ impl IntegratedCognition {
             self.continuity
                 .remember(&question, &query.subject.text, &query.object.text);
             self.dialogue_goal.bind_relation(&question);
+            self.grounding.clear_unresolved();
         }
         let mut labels=std::collections::HashMap::new();
         let mut world = WorldGraph::new(1024, 512);
