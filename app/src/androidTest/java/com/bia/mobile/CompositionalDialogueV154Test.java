@@ -9,8 +9,8 @@ public final class CompositionalDialogueV154Test extends InstrumentationTestCase
   say("Mưa có gây ra đường ướt không?");
   say("Gió có gây ra sóng không?");
   String r=say("Giải thích rõ, so sánh với trường hợp trước rồi tóm tắt ngắn gọn");
-  assertTrue(r,r.contains("Giải thích hiện tại:"));
-  assertTrue(r,r.contains("Đối chiếu:"));
-  assertTrue(r,r.contains("Tóm tắt:"));
+  assertTrue(r,r.contains("ủng hộ"));
+  assertTrue(r,r.contains("Đặt cạnh trường hợp trước"));
+  assertTrue(r,r.contains("Tóm lại"));
  }
 }
