@@ -1653,6 +1653,7 @@ pub mod dynamic_dialogue_intent;
 pub mod dialogue_goal_state;
 pub mod dialogue_synthesis;
 pub mod dialogue_thread;
+pub mod contextual_dialogue_policy;
 pub mod dialogue_repair;
 pub mod open_dialogue;
 pub mod intent_fusion;
