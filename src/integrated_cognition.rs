@@ -158,6 +158,68 @@ impl IntegratedCognition {
                 ImplicitDialogueGoal::Explore | ImplicitDialogueGoal::Verify => {}
             }
         }
+        if let Some(thread_move) = crate::dialogue_thread::parse(input) {
+            use crate::dialogue_goal_state::ImplicitDialogueGoal;
+            use crate::dialogue_thread::DialogueThreadMove;
+            match thread_move {
+                DialogueThreadMove::ExplainCause | DialogueThreadMove::Continue => {
+                    if let Some(q) = self.last_question.clone() {
+                        self.dialogue_goal.advance(ImplicitDialogueGoal::Explore);
+                        let deep = self.answer_styled(
+                            &q,
+                            crate::expression_style::ExpressionStyle::Deep,
+                        );
+                        let prefix = match thread_move {
+                            DialogueThreadMove::ExplainCause => "Mở rộng theo nhánh nhân/quả từ câu vừa rồi",
+                            DialogueThreadMove::Continue => "Tiếp tục đúng mạch quan hệ vừa rồi",
+                            _ => unreachable!(),
+                        };
+                        return Some(format!("{prefix}: {deep}"));
+                    }
+                }
+                DialogueThreadMove::GroundEvidence => {
+                    if let Some(q) = self.last_question.clone() {
+                        self.answer_restate(&q);
+                        self.last_source_snapshot = self.relation_source_snapshot(&q);
+                        let mut out = String::from(
+                            "Nguồn của đường suy luận vừa xét (thông tin được báo lại, chưa xác minh độc lập):",
+                        );
+                        for name in &self.last_evidence {
+                            if let Some(source) = self.sources.iter().find(|s| &s.name == name) {
+                                out.push_str(&format!("\n{}: {}", source.name, source.text));
+                            }
+                        }
+                        if self.last_evidence.is_empty() {
+                            out.push_str(
+                                " chưa xác định được đường bằng chứng đơn nhất; hãy xem phần giải thích.",
+                            );
+                        }
+                        return Some(format!("Kiểm tra lại theo bằng chứng của câu vừa rồi. {out}"));
+                    }
+                }
+                DialogueThreadMove::Return => {
+                    if let Some(q) = self
+                        .continuity
+                        .previous()
+                        .map(|turn| turn.question.clone())
+                        .or_else(|| self.last_question.clone())
+                    {
+                        return Some(self.answer_styled(
+                            &q,
+                            crate::expression_style::ExpressionStyle::Standard,
+                        ));
+                    }
+                }
+                DialogueThreadMove::Clarify => {
+                    if let Some(q) = self.last_question.clone() {
+                        return Some(format!(
+                            "Tôi đang giữ mạch “{q}”. Bạn muốn làm rõ nguyên nhân, kết quả hay bằng chứng?"
+                        ));
+                    }
+                }
+                DialogueThreadMove::Compare | DialogueThreadMove::Counterfactual => {}
+            }
+        }
         if let Some(plan) = crate::dynamic_dialogue_intent::DynamicDialoguePlan::parse(input) {
             return Some(self.execute_dynamic_dialogue_plan(plan));
         }
@@ -1036,6 +1098,78 @@ impl IntegratedCognition {
                     text.push_str(&format!(" Đã xét các nguồn: {}.", consulted.join(", ")));
                 }
             }
+        }
+        let policy = crate::contextual_dialogue_policy::ContextualDialoguePolicy::select(
+            self.dialogue_goal.current().unwrap_or(crate::dialogue_goal_state::ImplicitDialogueGoal::Explore),
+            relation_continuity,
+            &weave,
+            uncertainty,
+            self.last_evidence.len(),
+            self.repair_pending,
+        );
+        let mut synthesis = crate::dialogue_synthesis::DialogueSynthesisPlan::build(
+            self.dialogue_goal.current(),
+            relation_continuity,
+            &weave,
+            uncertainty,
+            self.last_evidence.len(),
+        );
+        use crate::contextual_dialogue_policy::DialogueAction;
+        let selected = &policy.actions;
+        synthesis.moves.retain(|m| {
+            match m {
+                crate::dialogue_synthesis::DialogueMove::Answer => true,
+                crate::dialogue_synthesis::DialogueMove::Ground => policy.has(DialogueAction::Ground),
+                crate::dialogue_synthesis::DialogueMove::Contrast => policy.has(DialogueAction::Contrast),
+                crate::dialogue_synthesis::DialogueMove::Qualify => policy.has(DialogueAction::Qualify),
+                crate::dialogue_synthesis::DialogueMove::Continue => policy.has(DialogueAction::Continue),
+                crate::dialogue_synthesis::DialogueMove::Clarify => policy.has(DialogueAction::Clarify),
+                crate::dialogue_synthesis::DialogueMove::Invite => policy.has(DialogueAction::Invite),
+                crate::dialogue_synthesis::DialogueMove::Close => policy.has(DialogueAction::Conclude),
+            }
+        });
+        if policy.has(DialogueAction::Explain) && !synthesis.moves.contains(&crate::dialogue_synthesis::DialogueMove::Ground) {
+            synthesis.moves.push(crate::dialogue_synthesis::DialogueMove::Ground);
+        }
+        if selected.is_empty() {
+            synthesis.moves.push(crate::dialogue_synthesis::DialogueMove::Answer);
+        }
+        synthesis.moves.truncate(6);
+        let composition = crate::causal_dialogue_composer::CausalDialogueComposition::build(
+            &policy.actions,
+            &weave,
+            uncertainty,
+            self.last_evidence.len(),
+        );
+        let mut composed_moves = Vec::new();
+        for action in composition.actions() {
+            let move_kind = match action {
+                DialogueAction::Answer => crate::dialogue_synthesis::DialogueMove::Answer,
+                DialogueAction::Explain | DialogueAction::Ground => crate::dialogue_synthesis::DialogueMove::Ground,
+                DialogueAction::Contrast => crate::dialogue_synthesis::DialogueMove::Contrast,
+                DialogueAction::Qualify => crate::dialogue_synthesis::DialogueMove::Qualify,
+                DialogueAction::Continue | DialogueAction::Return => crate::dialogue_synthesis::DialogueMove::Continue,
+                DialogueAction::Clarify => crate::dialogue_synthesis::DialogueMove::Clarify,
+                DialogueAction::Invite => crate::dialogue_synthesis::DialogueMove::Invite,
+                DialogueAction::Conclude => crate::dialogue_synthesis::DialogueMove::Close,
+            };
+            if !composed_moves.contains(&move_kind) {
+                composed_moves.push(move_kind);
+            }
+        }
+        if !composed_moves.is_empty() {
+            synthesis.moves = composed_moves;
+        }
+        synthesis.moves.truncate(6);
+        let open_plan = crate::open_dialogue::OpenDialoguePlan::from_synthesis(&synthesis);
+        if style != crate::expression_style::ExpressionStyle::Brief {
+            text = synthesis.render(
+                text,
+                &query.subject.text,
+                &query.object.text,
+                &self.last_evidence,
+            );
+            text = open_plan.compose(text, &query.subject.text, &query.object.text);
         }
         if remember_turn {
             self.last_source_snapshot=self.relation_source_snapshot(&question);

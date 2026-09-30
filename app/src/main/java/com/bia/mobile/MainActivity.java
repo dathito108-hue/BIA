@@ -26,6 +26,7 @@ import android.view.Window;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -49,6 +50,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private final android.os.Handler executionHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable executionPump = this::handlePendingAction;
     private TextView executionStatus;
+    private LinearLayout dashboardContent;
     private static final int REQ_DOCUMENT = 98;
 
     static {
@@ -142,52 +144,70 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
         LinearLayout root = column();
         root.setBackgroundColor(BG);
-        root.setPadding(dp(18), dp(14), dp(18), dp(14));
+        root.setPadding(dp(16), dp(12), dp(16), dp(10));
 
-        root.addView(buildHeader());
-        root.addView(buildStatusCard());
-        executionStatus = text("Tự duyệt: tắt", 12, MUTED, Typeface.NORMAL);
-        root.addView(executionStatus);
-        Button stopExecution = compactButton("Dừng chuỗi / Tắt tự duyệt");
-        stopExecution.setOnClickListener(v -> {
-            executionHandler.removeCallbacks(executionPump);
-            synchronized (executionLock) { nativeStopAutomation(); persistAll(); }
-            addBubble("Đã dừng các bước chưa chạy và thu hồi quyền tự duyệt. Bước chưa rõ kết quả được giữ để kiểm tra.", false);
-            refreshStatus();
-        });
-        root.addView(stopExecution);
-        Button creative = compactButton("Xưởng ảnh & 3D: tạo và xuất tài nguyên");
-        creative.setOnClickListener(v -> startActivity(new Intent(this, CreativeActivity.class)));
-        root.addView(creative);
-        Button products = compactButton("Xưởng sản phẩm: tạo mã và gói bàn giao");
-        products.setOnClickListener(v -> startActivity(new Intent(this, ProductActivity.class)));
-        root.addView(products);
-        Button game = compactButton("Game: quan sát và đa chạm");
-        game.setOnClickListener(v -> startActivity(new Intent(this, GameSetupActivity.class)));
-        root.addView(game);
-        Button trading = compactButton("Trading: dữ liệu realtime");
-        trading.setOnClickListener(v -> startActivity(new Intent(this, TradingActivity.class)));
-        root.addView(trading);
-        Button dex = compactButton("DEX: pool thật và chuẩn bị swap");
-        dex.setOnClickListener(v -> startActivity(new Intent(this, DexActivity.class)));
-        root.addView(dex);
-        Button solana = compactButton("Solana: ví và giao dịch mainnet");
-        solana.setOnClickListener(v -> startActivity(new Intent(this, SolanaActivity.class)));
-        root.addView(solana);
+        root.addView(buildDashboardHeader());
+        root.addView(buildDashboardStatus());
+        root.addView(buildDashboardTabs());
 
-        scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        messages = column();
-        messages.setPadding(0, dp(12), 0, dp(12));
-        scroll.addView(messages);
+        executionStatus = text("Tự duyệt: tắt hoặc hết hạn", 12, MUTED, Typeface.NORMAL);
+        executionStatus.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams execStatusParams =
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                );
+        execStatusParams.setMargins(0, dp(3), 0, dp(3));
+        root.addView(executionStatus, execStatusParams);
 
-        LinearLayout.LayoutParams scrollParams =
+        // Dashboard scrolls independently so it can never push the chat off-screen.
+        dashboardContent = column();
+        dashboardContent.addView(buildCapabilityDashboard());
+        ScrollView dashboardScroll = new ScrollView(this);
+        dashboardScroll.setFillViewport(true);
+        dashboardScroll.setVerticalScrollBarEnabled(true);
+        dashboardScroll.addView(dashboardContent);
+        LinearLayout.LayoutParams dashboardScrollParams =
                 new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         0,
                         1f
                 );
-        root.addView(scroll, scrollParams);
+        dashboardScrollParams.setMargins(0, dp(2), 0, dp(4));
+        root.addView(dashboardScroll, dashboardScrollParams);
+
+        // Keep a dedicated, always-visible conversation viewport above the composer.
+        LinearLayout chatPanel = column();
+        GradientDrawable chatBg = rounded(Color.rgb(16, 27, 23), dp(16));
+        chatBg.setStroke(dp(1), Color.rgb(38, 67, 57));
+        chatPanel.setBackground(chatBg);
+        chatPanel.setPadding(dp(8), dp(5), dp(8), 0);
+        TextView chatTitle = text("HỘI THOẠI  •  BIA", 10, JADE, Typeface.BOLD);
+        chatTitle.setPadding(dp(4), 0, 0, dp(2));
+        chatPanel.addView(chatTitle);
+
+        scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setVerticalScrollBarEnabled(true);
+        messages = column();
+        messages.setPadding(dp(4), dp(3), dp(4), dp(5));
+        scroll.addView(messages);
+        LinearLayout.LayoutParams chatScrollParams =
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        dp(118)
+                );
+        chatPanel.addView(scroll, chatScrollParams);
+        root.addView(chatPanel);
+
+        // Composer stays outside all scroll containers, so it remains reachable.
+        LinearLayout.LayoutParams composerParams =
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                );
+        composerParams.setMargins(0, dp(2), 0, 0);
+        root.addView(buildComposer(), composerParams);
 
         if (restoredMemory || restoredRuntime) {
             addBubble(
@@ -206,7 +226,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                 false
         );
 
-        root.addView(buildComposer());
         setContentView(root);
         refreshStatus();
 
@@ -260,6 +279,314 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             ttsReady = result != TextToSpeech.LANG_MISSING_DATA
                     && result != TextToSpeech.LANG_NOT_SUPPORTED;
         }
+    }
+
+    private View buildDashboardHeader() {
+        LinearLayout header = column();
+        header.setPadding(0, dp(2), 0, dp(12));
+
+        LinearLayout top = row();
+        top.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView mark = text("◎", 32, GOLD, Typeface.BOLD);
+        GradientDrawable markBg = rounded(Color.rgb(25, 43, 37), dp(20));
+        markBg.setStroke(dp(2), GOLD);
+        mark.setBackground(markBg);
+        mark.setGravity(Gravity.CENTER);
+        top.addView(mark, new LinearLayout.LayoutParams(dp(58), dp(58)));
+
+        LinearLayout title = column();
+        title.setPadding(dp(12), 0, dp(8), 0);
+        title.addView(text("BIA", 29, TEXT, Typeface.BOLD));
+        title.addView(text("Trí tuệ Duyên khởi • Tam-Thiên Matrix V9", 13, MUTED, Typeface.NORMAL));
+        title.addView(text("Hiểu sâu  •  Suy nghĩ đúng  •  Giao tiếp tự do", 12, JADE, Typeface.BOLD));
+        top.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView local = text("● LOCAL", 12, JADE, Typeface.BOLD);
+        local.setGravity(Gravity.CENTER);
+        local.setPadding(dp(10), dp(8), dp(10), dp(8));
+        GradientDrawable localBg = rounded(Color.rgb(18, 54, 42), dp(18));
+        localBg.setStroke(dp(1), Color.rgb(67, 159, 119));
+        local.setBackground(localBg);
+        top.addView(local);
+
+        header.addView(top);
+
+        TextView ready = text("●  Sẵn sàng cục bộ  •  Tự vận hành  •  Tự học  •  Tự tiến hóa", 11, MUTED, Typeface.NORMAL);
+        ready.setPadding(dp(8), dp(7), 0, 0);
+        header.addView(ready);
+
+        return header;
+    }
+
+    private View buildDashboardStatus() {
+        LinearLayout card = dashboardCard();
+        LinearLayout content = row();
+        content.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView ring = text("73%", 19, TEXT, Typeface.BOLD);
+        ring.setGravity(Gravity.CENTER);
+        GradientDrawable ringBg = rounded(Color.rgb(17, 49, 39), dp(34));
+        ringBg.setStroke(dp(3), JADE);
+        ring.setBackground(ringBg);
+        content.addView(ring, new LinearLayout.LayoutParams(dp(72), dp(72)));
+
+        LinearLayout stats = column();
+        stats.setPadding(dp(12), 0, dp(8), 0);
+        stats.addView(text("TRẠNG THÁI BIA", 13, TEXT, Typeface.BOLD));
+        status = text("Đang khởi tạo...", 11, MUTED, Typeface.NORMAL);
+        stats.addView(status);
+        stats.addView(text("Chu kỳ • Cảnh • Chứng từ • Nguồn", 10, MUTED, Typeface.NORMAL));
+        content.addView(stats, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView weave = text("CẢNH  →  QUÁN  →  HÀNH", 10, GOLD, Typeface.BOLD);
+        weave.setGravity(Gravity.CENTER);
+        weave.setPadding(dp(8), dp(8), dp(8), dp(8));
+        GradientDrawable weaveBg = rounded(Color.rgb(40, 38, 23), dp(14));
+        weaveBg.setStroke(dp(1), GOLD);
+        weave.setBackground(weaveBg);
+        content.addView(weave, new LinearLayout.LayoutParams(dp(150), dp(48)));
+
+        card.addView(content);
+        return card;
+    }
+
+    private View buildDashboardTabs() {
+        HorizontalScrollView horizontal = new HorizontalScrollView(this);
+        horizontal.setHorizontalScrollBarEnabled(false);
+        horizontal.setFillViewport(false);
+        horizontal.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        horizontal.setPadding(0, dp(3), 0, dp(3));
+
+        LinearLayout tabs = row();
+        tabs.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView capabilities = dashboardTab("NĂNG LỰC", true);
+        TextView functions = dashboardTab("CHỨC NĂNG", false);
+        TextView dialogue = dashboardTab("GIAO TIẾP", false);
+        TextView system = dashboardTab("HỆ THỐNG", false);
+
+        View.OnClickListener listener = v -> {
+            TextView selected = (TextView) v;
+            capabilities.setBackground(tabBackground(selected == capabilities));
+            functions.setBackground(tabBackground(selected == functions));
+            dialogue.setBackground(tabBackground(selected == dialogue));
+            system.setBackground(tabBackground(selected == system));
+            dashboardContent.removeAllViews();
+            if (selected == capabilities) {
+                dashboardContent.addView(buildCapabilityDashboard());
+            } else if (selected == functions) {
+                dashboardContent.addView(buildFunctionsDashboard());
+            } else if (selected == dialogue) {
+                dashboardContent.addView(buildDialogueDashboard());
+            } else {
+                dashboardContent.addView(buildSystemDashboard());
+            }
+            dashboardContent.post(() -> {
+                ScrollView parent = (ScrollView) dashboardContent.getParent();
+                parent.scrollTo(0, 0);
+            });
+        };
+
+        capabilities.setOnClickListener(listener);
+        functions.setOnClickListener(listener);
+        dialogue.setOnClickListener(listener);
+        system.setOnClickListener(listener);
+
+        tabs.addView(capabilities, tabParams());
+        tabs.addView(functions, tabParams());
+        tabs.addView(dialogue, tabParams());
+        tabs.addView(system, tabParams());
+        horizontal.addView(tabs);
+        return horizontal;
+    }
+
+    private TextView dashboardTab(String label, boolean selected) {
+        TextView t = text(label, 10, selected ? TEXT : MUTED, Typeface.BOLD);
+        t.setGravity(Gravity.CENTER);
+        t.setPadding(dp(3), dp(10), dp(3), dp(10));
+        t.setBackground(tabBackground(selected));
+        return t;
+    }
+
+    private GradientDrawable tabBackground(boolean selected) {
+        GradientDrawable bg = rounded(selected ? Color.rgb(31, 67, 54) : Color.rgb(20, 31, 27), dp(14));
+        bg.setStroke(dp(1), selected ? JADE : Color.rgb(42, 62, 55));
+        return bg;
+    }
+
+    private LinearLayout.LayoutParams tabParams() {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(116), ViewGroup.LayoutParams.WRAP_CONTENT);
+        p.setMargins(dp(2), 0, dp(2), 0);
+        return p;
+    }
+
+    private View buildCapabilityDashboard() {
+        LinearLayout panel = dashboardCard();
+        LinearLayout heading = row();
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        TextView h = text("Các năng lực của BIA", 18, TEXT, Typeface.BOLD);
+        heading.addView(h, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView all = text("TẤT CẢ", 11, JADE, Typeface.BOLD);
+        all.setGravity(Gravity.CENTER);
+        all.setPadding(dp(10), dp(6), dp(10), dp(6));
+        all.setBackground(rounded(Color.rgb(18, 52, 43), dp(16)));
+        heading.addView(all);
+        panel.addView(heading);
+
+        panel.addView(text("Năng lực lõi • Duyên khởi • Nhận thức • Suy luận • Giao tiếp • Hành động", 11, MUTED, Typeface.NORMAL));
+
+        LinearLayout grid1 = row();
+        grid1.addView(capabilityCard("◉", "Hiểu ngữ nghĩa", "Phân tích • Bối cảnh • Ý định", JADE), weightParams());
+        grid1.addView(capabilityCard("✣", "Duyên khởi", "Nhân–duyên • Chồng chéo • Hệ quả", GOLD), weightParams());
+        grid1.addView(capabilityCard("◎", "Suy luận", "Sâu • Mở • Phản biện", Color.rgb(93, 165, 235)), weightParams());
+        panel.addView(grid1);
+
+        LinearLayout grid2 = row();
+        grid2.addView(capabilityCard("↺", "Liên tục mạch", "Nhớ lại • Nối quan hệ • Trở lại", Color.rgb(62, 202, 190)), weightParams());
+        grid2.addView(capabilityCard("✓", "Bằng chứng", "Nguồn tin • Xác thực • Provenance", Color.rgb(229, 111, 139)), weightParams());
+        grid2.addView(capabilityCard("?", "Bất định", "Đánh giá • Điều chỉnh • Rủi ro", Color.rgb(142, 126, 231)), weightParams());
+        panel.addView(grid2);
+
+        LinearLayout grid3 = row();
+        grid3.addView(capabilityCard("•••", "Giao tiếp tự do", "Suy luận • Lựa chọn • Biểu đạt", Color.rgb(95, 205, 239)), weightParams());
+        grid3.addView(capabilityCard("↯", "Tự học & tự chủ", "Học liên tục • Lập kế hoạch • Thực thi", Color.rgb(111, 213, 154)), weightParams());
+        grid3.addView(capabilityCard("◇", "Sáng tạo & tác vụ", "Ảnh/3D • Sản phẩm • Game", Color.rgb(218, 168, 91)), weightParams());
+        panel.addView(grid3);
+
+        panel.addView(sectionTitle("Bộ sinh giao tiếp  •  V163 → V167"));
+        panel.addView(capabilityProgress());
+
+        LinearLayout tools = row();
+        tools.addView(actionTile("Xưởng ảnh & 3D", "Tạo / xuất tài nguyên", v -> startActivity(new Intent(this, CreativeActivity.class))), weightParams());
+        tools.addView(actionTile("Xưởng sản phẩm", "Mã / gói bàn giao", v -> startActivity(new Intent(this, ProductActivity.class))), weightParams());
+        tools.addView(actionTile("Game", "Quan sát / đa chạm", v -> startActivity(new Intent(this, GameSetupActivity.class))), weightParams());
+        panel.addView(tools);
+
+        LinearLayout live = row();
+        live.addView(actionTile("Trading", "Dữ liệu realtime", v -> startActivity(new Intent(this, TradingActivity.class))), weightParams());
+        live.addView(actionTile("DEX", "Pool / chuẩn bị swap", v -> startActivity(new Intent(this, DexActivity.class))), weightParams());
+        live.addView(actionTile("Solana", "Ví / mainnet", v -> startActivity(new Intent(this, SolanaActivity.class))), weightParams());
+        panel.addView(live);
+
+        return panel;
+    }
+
+    private LinearLayout.LayoutParams weightParams() {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        p.setMargins(dp(3), dp(3), dp(3), dp(3));
+        return p;
+    }
+
+    private View sectionTitle(String value) {
+        TextView t = text(value, 13, GOLD, Typeface.BOLD);
+        t.setPadding(dp(4), dp(12), 0, dp(5));
+        return t;
+    }
+
+    private View capabilityCard(String icon, String title, String subtitle, int accent) {
+        LinearLayout c = column();
+        c.setPadding(dp(9), dp(9), dp(8), dp(10));
+        GradientDrawable bg = rounded(Color.rgb(20, 39, 34), dp(15));
+        bg.setStroke(dp(1), accent);
+        c.setBackground(bg);
+        c.addView(text(icon, 20, accent, Typeface.BOLD));
+        c.addView(text(title, 12, TEXT, Typeface.BOLD));
+        c.addView(text(subtitle, 9, MUTED, Typeface.NORMAL));
+        return c;
+    }
+
+    private View capabilityProgress() {
+        LinearLayout box = column();
+        box.setPadding(dp(8), dp(6), dp(8), dp(8));
+        box.setBackground(rounded(Color.rgb(17, 42, 36), dp(14)));
+        LinearLayout stages = row();
+        String[] v = {"V163\nTổng hợp", "V164\nĐộ sâu", "V165\nHội thoại mở", "V166\nMạch", "V167\nChính sách"};
+        for (String item : v) {
+            TextView t = text(item, 9, TEXT, Typeface.BOLD);
+            t.setGravity(Gravity.CENTER);
+            stages.addView(t, weightParams());
+        }
+        box.addView(stages);
+        TextView done = text("━━━━━━━━━━━━━━━━━━━━  100%  •  Đã triển khai", 10, JADE, Typeface.BOLD);
+        done.setPadding(dp(4), dp(5), 0, 0);
+        box.addView(done);
+        return box;
+    }
+
+    private View buildFunctionsDashboard() {
+        LinearLayout panel = dashboardCard();
+        panel.addView(sectionTitle("TÁC VỤ & CÔNG CỤ"));
+        LinearLayout r1 = row();
+        r1.addView(actionTile("Ảnh & 3D", "Tạo / xuất tài nguyên", v -> startActivity(new Intent(this, CreativeActivity.class))), weightParams());
+        r1.addView(actionTile("Sản phẩm", "Tạo mã / bàn giao", v -> startActivity(new Intent(this, ProductActivity.class))), weightParams());
+        r1.addView(actionTile("Game", "Quan sát / đa chạm", v -> startActivity(new Intent(this, GameSetupActivity.class))), weightParams());
+        panel.addView(r1);
+        LinearLayout r2 = row();
+        r2.addView(actionTile("Trading", "Dữ liệu realtime", v -> startActivity(new Intent(this, TradingActivity.class))), weightParams());
+        r2.addView(actionTile("DEX", "Pool / swap", v -> startActivity(new Intent(this, DexActivity.class))), weightParams());
+        r2.addView(actionTile("Solana", "Ví / mainnet", v -> startActivity(new Intent(this, SolanaActivity.class))), weightParams());
+        panel.addView(r2);
+        panel.addView(sectionTitle("TỰ ĐỘNG HÓA"));
+        panel.addView(actionTile("Dừng chuỗi / Tắt tự duyệt", "Kiểm soát thực thi và quyền hành động", v -> {
+            nativeStopAutomation();
+            nativeRevokeApproval();
+            refreshStatus();
+        }));
+        panel.addView(actionTile("Lưu trạng thái", "Ký ức • liên tục • phục hồi sau restart", v -> {
+            nativeSave(memoryPath);
+            saveContinuity(nativeExportContinuity());
+            Toast.makeText(this, "Đã lưu trạng thái BIA", Toast.LENGTH_SHORT).show();
+        }));
+        return panel;
+    }
+
+    private View buildDialogueDashboard() {
+        LinearLayout panel = dashboardCard();
+        panel.addView(sectionTitle("GIAO TIẾP TỰ DO"));
+        panel.addView(text("Hiểu ý định → sửa sai → giữ mạch → nối nhân/quả → suy luận → bằng chứng → bất định → chọn cách đáp → sinh ngôn ngữ.", 11, MUTED, Typeface.NORMAL));
+        panel.addView(capabilityProgress());
+        LinearLayout r = row();
+        r.addView(capabilityCard("↺", "Giữ mạch", "Tiếp • Quay lại • Tham chiếu", JADE), weightParams());
+        r.addView(capabilityCard("⇄", "Chồng nhân–duyên", "Nhiều nhánh • Giao nhau", GOLD), weightParams());
+        r.addView(capabilityCard("✎", "Sửa & làm rõ", "Repair • Clarify • Re-anchor", Color.rgb(95, 205, 239)), weightParams());
+        panel.addView(r);
+        return panel;
+    }
+
+    private View buildSystemDashboard() {
+        LinearLayout panel = dashboardCard();
+        panel.addView(sectionTitle("HỆ THỐNG BIA"));
+        panel.addView(capabilityCard("●", "Local Core", "Chạy cục bộ • Không cần AI core thứ hai", JADE));
+        panel.addView(capabilityCard("↯", "Tự chủ", "Tự duyệt • Quyền hành động • An toàn thực thi", GOLD));
+        panel.addView(capabilityCard("◌", "Bộ nhớ", "Ký ức • liên tục • phục hồi", Color.rgb(95, 165, 235)));
+        panel.addView(capabilityCard("▣", "Tài nguyên", "Pin • nhiệt • tải • bộ nhớ", Color.rgb(62, 202, 190)));
+        return panel;
+    }
+
+    private View actionTile(String title, String subtitle, View.OnClickListener listener) {
+        Button b = new Button(this);
+        b.setText(title + "\n" + subtitle);
+        b.setTextColor(TEXT);
+        b.setTextSize(10);
+        b.setAllCaps(false);
+        b.setGravity(Gravity.CENTER);
+        b.setPadding(dp(4), dp(7), dp(4), dp(7));
+        b.setBackground(rounded(Color.rgb(29, 45, 40), dp(14)));
+        b.setOnClickListener(listener);
+        return b;
+    }
+
+    private LinearLayout dashboardCard() {
+        LinearLayout card = column();
+        card.setPadding(dp(10), dp(10), dp(10), dp(10));
+        GradientDrawable bg = rounded(Color.rgb(18, 31, 27), dp(20));
+        bg.setStroke(dp(1), Color.rgb(40, 73, 62));
+        card.setBackground(bg);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        p.setMargins(0, dp(5), 0, dp(5));
+        card.setLayoutParams(p);
+        return card;
     }
 
     private View buildHeader() {
