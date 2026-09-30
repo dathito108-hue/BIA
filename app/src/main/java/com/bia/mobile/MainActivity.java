@@ -26,6 +26,7 @@ import android.view.Window;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -152,27 +153,61 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         executionStatus = text("Tự duyệt: tắt hoặc hết hạn", 12, MUTED, Typeface.NORMAL);
         executionStatus.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams execStatusParams =
-                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        execStatusParams.setMargins(0, dp(4), 0, dp(4));
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                );
+        execStatusParams.setMargins(0, dp(3), 0, dp(3));
         root.addView(executionStatus, execStatusParams);
 
+        // Dashboard scrolls independently so it can never push the chat off-screen.
         dashboardContent = column();
         dashboardContent.addView(buildCapabilityDashboard());
-        root.addView(dashboardContent);
-
-        scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        messages = column();
-        messages.setPadding(0, dp(12), 0, dp(12));
-        scroll.addView(messages);
-
-        LinearLayout.LayoutParams scrollParams =
+        ScrollView dashboardScroll = new ScrollView(this);
+        dashboardScroll.setFillViewport(true);
+        dashboardScroll.setVerticalScrollBarEnabled(true);
+        dashboardScroll.addView(dashboardContent);
+        LinearLayout.LayoutParams dashboardScrollParams =
                 new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         0,
                         1f
                 );
-        root.addView(scroll, scrollParams);
+        dashboardScrollParams.setMargins(0, dp(2), 0, dp(4));
+        root.addView(dashboardScroll, dashboardScrollParams);
+
+        // Keep a dedicated, always-visible conversation viewport above the composer.
+        LinearLayout chatPanel = column();
+        GradientDrawable chatBg = rounded(Color.rgb(16, 27, 23), dp(16));
+        chatBg.setStroke(dp(1), Color.rgb(38, 67, 57));
+        chatPanel.setBackground(chatBg);
+        chatPanel.setPadding(dp(8), dp(5), dp(8), 0);
+        TextView chatTitle = text("HỘI THOẠI  •  BIA", 10, JADE, Typeface.BOLD);
+        chatTitle.setPadding(dp(4), 0, 0, dp(2));
+        chatPanel.addView(chatTitle);
+
+        scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setVerticalScrollBarEnabled(true);
+        messages = column();
+        messages.setPadding(dp(4), dp(3), dp(4), dp(5));
+        scroll.addView(messages);
+        LinearLayout.LayoutParams chatScrollParams =
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        dp(118)
+                );
+        chatPanel.addView(scroll, chatScrollParams);
+        root.addView(chatPanel);
+
+        // Composer stays outside all scroll containers, so it remains reachable.
+        LinearLayout.LayoutParams composerParams =
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                );
+        composerParams.setMargins(0, dp(2), 0, 0);
+        root.addView(buildComposer(), composerParams);
 
         if (restoredMemory || restoredRuntime) {
             addBubble(
@@ -191,7 +226,6 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
                 false
         );
 
-        root.addView(buildComposer());
         setContentView(root);
         refreshStatus();
 
@@ -318,8 +352,13 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     private View buildDashboardTabs() {
+        HorizontalScrollView horizontal = new HorizontalScrollView(this);
+        horizontal.setHorizontalScrollBarEnabled(false);
+        horizontal.setFillViewport(false);
+        horizontal.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        horizontal.setPadding(0, dp(3), 0, dp(3));
+
         LinearLayout tabs = row();
-        tabs.setPadding(0, dp(5), 0, dp(4));
         tabs.setGravity(Gravity.CENTER_VERTICAL);
 
         TextView capabilities = dashboardTab("NĂNG LỰC", true);
@@ -343,6 +382,10 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             } else {
                 dashboardContent.addView(buildSystemDashboard());
             }
+            dashboardContent.post(() -> {
+                ScrollView parent = (ScrollView) dashboardContent.getParent();
+                parent.scrollTo(0, 0);
+            });
         };
 
         capabilities.setOnClickListener(listener);
@@ -354,7 +397,8 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         tabs.addView(functions, tabParams());
         tabs.addView(dialogue, tabParams());
         tabs.addView(system, tabParams());
-        return tabs;
+        horizontal.addView(tabs);
+        return horizontal;
     }
 
     private TextView dashboardTab(String label, boolean selected) {
@@ -372,7 +416,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     }
 
     private LinearLayout.LayoutParams tabParams() {
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(116), ViewGroup.LayoutParams.WRAP_CONTENT);
         p.setMargins(dp(2), 0, dp(2), 0);
         return p;
     }
