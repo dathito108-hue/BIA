@@ -49,6 +49,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     private final android.os.Handler executionHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable executionPump = this::handlePendingAction;
     private TextView executionStatus;
+    private LinearLayout dashboardContent;
     private static final int REQ_DOCUMENT = 98;
 
     static {
@@ -146,6 +147,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
         root.addView(buildDashboardHeader());
         root.addView(buildDashboardStatus());
+        root.addView(buildDashboardTabs());
 
         executionStatus = text("Tự duyệt: tắt hoặc hết hạn", 12, MUTED, Typeface.NORMAL);
         executionStatus.setGravity(Gravity.CENTER);
@@ -154,7 +156,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         execStatusParams.setMargins(0, dp(4), 0, dp(4));
         root.addView(executionStatus, execStatusParams);
 
-        root.addView(buildCapabilityDashboard());
+        dashboardContent = column();
+        dashboardContent.addView(buildCapabilityDashboard());
+        root.addView(dashboardContent);
 
         scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -283,33 +287,94 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
 
     private View buildDashboardStatus() {
         LinearLayout card = dashboardCard();
-        LinearLayout left = row();
-        left.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout content = row();
+        content.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView ring = text("73%", 20, TEXT, Typeface.BOLD);
+        TextView ring = text("73%", 19, TEXT, Typeface.BOLD);
         ring.setGravity(Gravity.CENTER);
-        GradientDrawable ringBg = rounded(Color.rgb(17, 49, 39), dp(36));
-        ringBg.setStroke(dp(4), JADE);
+        GradientDrawable ringBg = rounded(Color.rgb(17, 49, 39), dp(34));
+        ringBg.setStroke(dp(3), JADE);
         ring.setBackground(ringBg);
-        left.addView(ring, new LinearLayout.LayoutParams(dp(78), dp(78)));
+        content.addView(ring, new LinearLayout.LayoutParams(dp(72), dp(72)));
 
         LinearLayout stats = column();
-        stats.setPadding(dp(12), 0, 0, 0);
-        stats.addView(text("TRẠNG THÁI BIA", 14, TEXT, Typeface.BOLD));
-        status = text("Đang khởi tạo...", 12, MUTED, Typeface.NORMAL);
+        stats.setPadding(dp(12), 0, dp(8), 0);
+        stats.addView(text("TRẠNG THÁI BIA", 13, TEXT, Typeface.BOLD));
+        status = text("Đang khởi tạo...", 11, MUTED, Typeface.NORMAL);
         stats.addView(status);
-        stats.addView(text("Chu kỳ  •  Cảnh  •  Chứng từ  •  Nguồn", 11, MUTED, Typeface.NORMAL));
-        left.addView(stats, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        stats.addView(text("Chu kỳ • Cảnh • Chứng từ • Nguồn", 10, MUTED, Typeface.NORMAL));
+        content.addView(stats, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        TextView weave = text("CẢNH\n↓\nQUÁN\n↓\nHÀNH", 12, GOLD, Typeface.BOLD);
+        TextView weave = text("CẢNH  →  QUÁN  →  HÀNH", 10, GOLD, Typeface.BOLD);
         weave.setGravity(Gravity.CENTER);
-        weave.setPadding(dp(10), dp(8), dp(10), dp(8));
-        GradientDrawable weaveBg = rounded(Color.rgb(40, 38, 23), dp(16));
+        weave.setPadding(dp(8), dp(8), dp(8), dp(8));
+        GradientDrawable weaveBg = rounded(Color.rgb(40, 38, 23), dp(14));
         weaveBg.setStroke(dp(1), GOLD);
         weave.setBackground(weaveBg);
-        card.addView(left, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        card.addView(weave, new LinearLayout.LayoutParams(dp(78), dp(78)));
+        content.addView(weave, new LinearLayout.LayoutParams(dp(150), dp(48)));
+
+        card.addView(content);
         return card;
+    }
+
+    private View buildDashboardTabs() {
+        LinearLayout tabs = row();
+        tabs.setPadding(0, dp(5), 0, dp(4));
+        tabs.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView capabilities = dashboardTab("NĂNG LỰC", true);
+        TextView functions = dashboardTab("CHỨC NĂNG", false);
+        TextView dialogue = dashboardTab("GIAO TIẾP", false);
+        TextView system = dashboardTab("HỆ THỐNG", false);
+
+        View.OnClickListener listener = v -> {
+            TextView selected = (TextView) v;
+            capabilities.setBackground(tabBackground(selected == capabilities));
+            functions.setBackground(tabBackground(selected == functions));
+            dialogue.setBackground(tabBackground(selected == dialogue));
+            system.setBackground(tabBackground(selected == system));
+            dashboardContent.removeAllViews();
+            if (selected == capabilities) {
+                dashboardContent.addView(buildCapabilityDashboard());
+            } else if (selected == functions) {
+                dashboardContent.addView(buildFunctionsDashboard());
+            } else if (selected == dialogue) {
+                dashboardContent.addView(buildDialogueDashboard());
+            } else {
+                dashboardContent.addView(buildSystemDashboard());
+            }
+        };
+
+        capabilities.setOnClickListener(listener);
+        functions.setOnClickListener(listener);
+        dialogue.setOnClickListener(listener);
+        system.setOnClickListener(listener);
+
+        tabs.addView(capabilities, tabParams());
+        tabs.addView(functions, tabParams());
+        tabs.addView(dialogue, tabParams());
+        tabs.addView(system, tabParams());
+        return tabs;
+    }
+
+    private TextView dashboardTab(String label, boolean selected) {
+        TextView t = text(label, 10, selected ? TEXT : MUTED, Typeface.BOLD);
+        t.setGravity(Gravity.CENTER);
+        t.setPadding(dp(3), dp(10), dp(3), dp(10));
+        t.setBackground(tabBackground(selected));
+        return t;
+    }
+
+    private GradientDrawable tabBackground(boolean selected) {
+        GradientDrawable bg = rounded(selected ? Color.rgb(31, 67, 54) : Color.rgb(20, 31, 27), dp(14));
+        bg.setStroke(dp(1), selected ? JADE : Color.rgb(42, 62, 55));
+        return bg;
+    }
+
+    private LinearLayout.LayoutParams tabParams() {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        p.setMargins(dp(2), 0, dp(2), 0);
+        return p;
     }
 
     private View buildCapabilityDashboard() {
@@ -375,38 +440,54 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         return t;
     }
 
-    private View capabilityCard(String icon, String title, String subtitle, int accent) {
-        LinearLayout c = column();
-        c.setPadding(dp(9), dp(9), dp(8), dp(10));
-        GradientDrawable bg = rounded(Color.rgb(20, 39, 34), dp(15));
-        bg.setStroke(dp(1), Color.rgb(Math.min(255, accent >> 16 & 255), Math.min(255, accent >> 8 & 255), Math.min(255, accent & 255)));
-        c.setBackground(bg);
-
-        TextView i = text(icon, 20, accent, Typeface.BOLD);
-        c.addView(i);
-        c.addView(text(title, 12, TEXT, Typeface.BOLD));
-        c.addView(text(subtitle, 9, MUTED, Typeface.NORMAL));
-        return c;
+    private View buildFunctionsDashboard() {
+        LinearLayout panel = dashboardCard();
+        panel.addView(sectionTitle("TÁC VỤ & CÔNG CỤ"));
+        LinearLayout r1 = row();
+        r1.addView(actionTile("Ảnh & 3D", "Tạo / xuất tài nguyên", v -> startActivity(new Intent(this, CreativeActivity.class))), weightParams());
+        r1.addView(actionTile("Sản phẩm", "Tạo mã / bàn giao", v -> startActivity(new Intent(this, ProductActivity.class))), weightParams());
+        r1.addView(actionTile("Game", "Quan sát / đa chạm", v -> startActivity(new Intent(this, GameSetupActivity.class))), weightParams());
+        panel.addView(r1);
+        LinearLayout r2 = row();
+        r2.addView(actionTile("Trading", "Dữ liệu realtime", v -> startActivity(new Intent(this, TradingActivity.class))), weightParams());
+        r2.addView(actionTile("DEX", "Pool / swap", v -> startActivity(new Intent(this, DexActivity.class))), weightParams());
+        r2.addView(actionTile("Solana", "Ví / mainnet", v -> startActivity(new Intent(this, SolanaActivity.class))), weightParams());
+        panel.addView(r2);
+        panel.addView(sectionTitle("TỰ ĐỘNG HÓA"));
+        panel.addView(actionTile("Dừng chuỗi / Tắt tự duyệt", "Kiểm soát thực thi và quyền hành động", v -> {
+            nativeStopAutomation();
+            nativeRevokeApproval();
+            refreshStatus();
+        }));
+        panel.addView(actionTile("Lưu trạng thái", "Ký ức • liên tục • phục hồi sau restart", v -> {
+            nativeSave(memoryPath);
+            saveContinuity();
+            Toast.makeText(this, "Đã lưu trạng thái BIA", Toast.LENGTH_SHORT).show();
+        }));
+        return panel;
     }
 
-    private View capabilityProgress() {
-        LinearLayout box = column();
-        box.setPadding(dp(8), dp(6), dp(8), dp(8));
-        box.setBackground(rounded(Color.rgb(17, 42, 36), dp(14)));
+    private View buildDialogueDashboard() {
+        LinearLayout panel = dashboardCard();
+        panel.addView(sectionTitle("GIAO TIẾP TỰ DO"));
+        panel.addView(text("Hiểu ý định → sửa sai → giữ mạch → nối nhân/quả → suy luận → bằng chứng → bất định → chọn cách đáp → sinh ngôn ngữ.", 11, MUTED, Typeface.NORMAL));
+        panel.addView(capabilityProgress());
+        LinearLayout r = row();
+        r.addView(capabilityCard("↺", "Giữ mạch", "Tiếp • Quay lại • Tham chiếu", JADE), weightParams());
+        r.addView(capabilityCard("⇄", "Chồng nhân–duyên", "Nhiều nhánh • Giao nhau", GOLD), weightParams());
+        r.addView(capabilityCard("✎", "Sửa & làm rõ", "Repair • Clarify • Re-anchor", Color.rgb(95, 205, 239)), weightParams());
+        panel.addView(r);
+        return panel;
+    }
 
-        LinearLayout row = row();
-        String[] v = {"V163\nTổng hợp", "V164\nĐộ sâu", "V165\nHội thoại mở", "V166\nMạch", "V167\nChính sách"};
-        for (String item : v) {
-            TextView t = text(item, 9, TEXT, Typeface.BOLD);
-            t.setGravity(Gravity.CENTER);
-            row.addView(t, weightParams());
-        }
-        box.addView(row);
-
-        TextView done = text("━━━━━━━━━━━━━━━━━━━━  100%  •  Đã triển khai", 10, JADE, Typeface.BOLD);
-        done.setPadding(dp(4), dp(5), 0, 0);
-        box.addView(done);
-        return box;
+    private View buildSystemDashboard() {
+        LinearLayout panel = dashboardCard();
+        panel.addView(sectionTitle("HỆ THỐNG BIA"));
+        panel.addView(capabilityCard("●", "Local Core", "Chạy cục bộ • Không cần AI core thứ hai", JADE));
+        panel.addView(capabilityCard("↯", "Tự chủ", "Tự duyệt • Quyền hành động • An toàn thực thi", GOLD));
+        panel.addView(capabilityCard("◌", "Bộ nhớ", "Ký ức • liên tục • phục hồi", Color.rgb(95, 165, 235)));
+        panel.addView(capabilityCard("▣", "Tài nguyên", "Pin • nhiệt • tải • bộ nhớ", Color.rgb(62, 202, 190)));
+        return panel;
     }
 
     private View actionTile(String title, String subtitle, View.OnClickListener listener) {
