@@ -65,6 +65,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
     );
 
     public static native String nativeImmediateToken(String input);
+    public static native void nativeResetDialogueForTests();
     public static native String nativeBenchmarkV12(int iterations);
     public static native String nativeStressV14(int iterations);
     public static native String nativeReasoningV15();
