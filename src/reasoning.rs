@@ -16,7 +16,6 @@ pub struct ReasoningVerdict {
     pub confidence: f32,
     pub contradicted: bool,
     pub best_path: Option<CausalPath>,
-    pub paths: Vec<CausalPath>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -59,6 +58,15 @@ impl CausalReasoner {
     /// oppose this claim. A stronger cause elsewhere is irrelevant to A -> B.
     /// Work is capped by depth * beam * stored edges; no unbounded frontier.
     pub fn infer_between(&self, world: &WorldGraph, source: u64, target: u64) -> ReasoningVerdict {
+        self.infer_between_with_paths(world, source, target).0
+    }
+
+    pub fn infer_between_with_paths(
+        &self,
+        world: &WorldGraph,
+        source: u64,
+        target: u64,
+    ) -> (ReasoningVerdict, Vec<CausalPath>) {
         let mut frontier = vec![CausalPath {
             nodes: vec![source],
             score: 1.0,
@@ -124,15 +132,17 @@ impl CausalReasoner {
         } else {
             support.max(opposition)
         };
-        ReasoningVerdict {
-            target,
-            support,
-            opposition,
-            confidence,
-            contradicted,
-            best_path,
+        (
+            ReasoningVerdict {
+                target,
+                support,
+                opposition,
+                confidence,
+                contradicted,
+                best_path,
+            },
             paths,
-        }
+        )
     }
 
     pub fn infer_without_node(
@@ -272,10 +282,6 @@ impl CausalReasoner {
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
 
-        let mut paths = scored_paths.to_vec();
-        paths.sort_by(score_desc);
-        paths.truncate(self.beam);
-
         ReasoningVerdict {
             target,
             support,
@@ -283,7 +289,6 @@ impl CausalReasoner {
             confidence,
             contradicted,
             best_path,
-            paths,
         }
     }
 
