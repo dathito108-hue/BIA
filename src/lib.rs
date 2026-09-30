@@ -97,6 +97,7 @@ pub use deliberation::{DeliberativePlanner, GoalSpec, PlanCandidate};
 pub use discovery::{ContextDiscovery, DiscoveredSimilarity};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
 pub use duyen_weave::DuyenWeave;
+pub use discourse_generator::{DiscourseMove, DiscoursePlan};
 pub use episodic::{Episode, EpisodeClause, EpisodicMemory};
 pub use evaluation::{run_v11_evaluation, run_v12_evaluation, run_v14_stress, run_v15_reasoning_evaluation, run_v16_generalization_evaluation, run_v18_open_reasoning_evaluation, run_v21_deep_intelligence_evaluation, run_v25_emergent_intelligence_evaluation, run_v31_autonomous_knowledge_evaluation, run_v37_deliberation_evaluation, run_v45_max_intelligence_evaluation, run_v61_learned_semantic_evaluation, run_v81_continual_generative_evaluation, run_v101_autonomous_loop_evaluation, V11Report, V12Report, V14StressReport, V15ReasoningReport, V16GeneralizationReport, V18OpenReasoningReport, V21DeepIntelligenceReport, V25EmergentIntelligenceReport, V31AutonomousKnowledgeReport, V37DeliberationReport, V45MaxIntelligenceReport, V61LearnedSemanticReport, V81ContinualGenerativeReport, V101AutonomousLoopReport};
 pub use four_matrix::{
@@ -1633,5 +1634,6 @@ pub mod general_training;
 
 pub mod conversation_language;
 pub mod duyen_weave;
+pub mod discourse_generator;
 
 pub mod learned_language;
