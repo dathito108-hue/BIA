@@ -14,7 +14,8 @@ public final class CreativeActivity extends Activity {
     Spinner kind,resolution;CheckBox transparent;int pendingSize=1024;boolean pendingTransparent;double pendingYaw=0.65,pendingPitch=0.35;EditText seed,detail,color,height;TextView status;Preview preview;CreativeEngine.Spec current,pending;Button generate,export,open;volatile boolean busy;
     final ExecutorService worker=Executors.newSingleThreadExecutor();
     @Override public void onCreate(Bundle state){super.onCreate(state);ScrollView scroll=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(20,16,20,16);scroll.addView(root);setContentView(scroll);
-        TextView intro=new TextView(this);intro.setText("Xưởng ảnh & 3D · V141\nTạo đồ họa thủ tục offline. Kéo trên mô hình để xoay. Ảnh tới 2048px, nền trong suốt, SVG hoặc OBJ; không tạo ảnh chân thực từ mô tả.");root.addView(intro);
+        TextView intro=new TextView(this);intro.setText("Xưởng ảnh & 3D · V142\nTạo đồ họa thủ tục offline. Kéo trên mô hình để xoay. Ảnh tới 2048px, nền trong suốt, SVG hoặc OBJ; không tạo ảnh chân thực từ mô tả.");root.addView(intro);
+        Button lab=button(root,"Phòng thử nghiệm: học sinh ảnh riêng");lab.setOnClickListener(v->startActivity(new Intent(this,ImageLabActivity.class)));
         Button advanced=button(root,"Mở Xưởng cảnh 3D nâng cao");advanced.setOnClickListener(v->startActivity(new Intent(this,SceneActivity.class)));
         kind=new Spinner(this);kind.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Ảnh hoa văn","Ảnh phong cảnh","3D khối hộp","3D hình cầu","3D bình trang trí (khối kín)","Ảnh dải sóng","Ảnh khảm tam giác"}));root.addView(kind);
         seed=field(root,"Seed (số nguyên)","42");detail=field(root,"Độ chi tiết 8–48","24");color=field(root,"Màu #RRGGBB","#46BDAA");height=field(root,"Tỷ lệ cao 0.5–3","1.2");

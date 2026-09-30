@@ -37,11 +37,14 @@ adb pull /sdcard/Android/data/com.bia.mobile/files/market-evidence.txt game-evid
 adb pull /sdcard/Android/data/com.bia.mobile/files/solana-evidence.txt game-evidence/solana-evidence.txt || true
 adb pull /sdcard/Android/data/com.bia.mobile/files/product-suite.zip game-evidence/product-suite.zip
 adb pull /sdcard/Android/data/com.bia.mobile/files/product-demo.zip game-evidence/product-demo.zip
-for name in creative-mandala.zip creative-landscape.zip creative-vase.zip creative-proof.png creative-scene-v141.zip creative-image-v141.zip; do
+for name in creative-mandala.zip creative-landscape.zip creative-vase.zip creative-proof.png creative-scene-v141.zip creative-image-v141.zip motion-v142.glb motion-v142.zip image-trial-v142.zip; do
     adb pull "/sdcard/Android/data/com.bia.mobile/files/$name" "game-evidence/$name"
 done
 python3 - <<'PY'
 from pathlib import Path
 s=Path('game-evidence/instrumentation.txt').read_text()
-assert 'OK (28 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, s
+assert 'OK (34 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, s
 PY
+
+npm install --prefix /tmp/bia-gltf-validation --ignore-scripts --no-audit --no-fund gltf-validator@2.0.0-dev.3.10
+NODE_PATH=/tmp/bia-gltf-validation/node_modules node scripts/validate-motion-glb.cjs game-evidence/motion-v142.glb game-evidence/glb-validation.json

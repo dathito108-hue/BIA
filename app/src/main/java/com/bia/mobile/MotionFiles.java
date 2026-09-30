@@ -1,0 +1,5 @@
+package com.bia.mobile;
+import java.io.*;import java.util.zip.*;import android.graphics.Bitmap;
+public final class MotionFiles {
+    static void zip(MotionProject p,OutputStream out)throws Exception{try(ZipOutputStream z=new ZipOutputStream(out)){SceneEngine.text(z,"project.bia-motion.json",p.json());CreativeEngine.entry(z,"scene.glb",GlbWriter.write(p));for(int i=0;i<2;i++){Bitmap b=SceneEngine.render(p.at(i==0?0:p.duration()/2),p.base.size,p.base);try{z.putNextEntry(new ZipEntry(i==0?"start.png":"middle.png"));if(!b.compress(Bitmap.CompressFormat.PNG,100,z))throw new IOException("PNG thất bại");z.closeEntry();}finally{b.recycle();}}SceneEngine.text(z,"README.txt","BIA V142 — GLB 2.0 có vật liệu, điêu khắc đã áp dụng và keyframe dịch chuyển/xoay Y/co giãn. Mỗi đơn vị cảnh xuất thành một mét. Chưa có khung xương, texture, mô phỏng vật lý hay biến dạng theo thời gian.\nDùng project.bia-motion.json để chỉnh tiếp trong BIA. PNG dùng khung hình cố định từ cảnh gốc; GLB viewer tự chọn camera/ánh sáng nên ảnh có thể khác. Chia nhỏ lưới là chia tam giác, không tự tái cấu trúc lưới hoặc bảo đảm in 3D.\n");}}
+}
