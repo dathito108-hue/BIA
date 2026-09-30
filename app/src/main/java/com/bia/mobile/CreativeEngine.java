@@ -12,10 +12,10 @@ public final class CreativeEngine {
     public static final class Spec {
         public final String kind; public final long seed; public final int detail,color; public final double height;
         public Spec(String k,long s,int d,int c,double h){
-            if(!Arrays.asList("mandala","landscape","box","sphere","vase").contains(k)||d<8||d>48||!Double.isFinite(h)||h<0.5||h>3)throw new IllegalArgumentException("Thông số ngoài giới hạn");
+            if(!Arrays.asList("mandala","landscape","waves","mosaic","box","sphere","vase").contains(k)||d<8||d>48||!Double.isFinite(h)||h<0.5||h>3)throw new IllegalArgumentException("Thông số ngoài giới hạn");
             kind=k;seed=s;detail=d;color=c|0xff000000;height=h;
         }
-        public boolean mesh(){return !kind.equals("mandala")&&!kind.equals("landscape");}
+        public boolean mesh(){return Arrays.asList("box","sphere","vase").contains(kind);}
         public String json()throws JSONException{return new JSONObject().put("schema","BIA_CREATIVE_1").put("kind",kind).put("seed",Long.toString(seed)).put("detail",detail).put("color",color).put("height",height).toString(2);}
         public static Spec parse(String text)throws JSONException{if(text.length()>4096)throw new IllegalArgumentException("Tệp quá lớn");JSONObject j=new JSONObject(text);if(!"BIA_CREATIVE_1".equals(j.getString("schema")))throw new IllegalArgumentException("Sai phiên bản");return new Spec(j.getString("kind"),Long.parseLong(j.getString("seed")),j.getInt("detail"),j.getInt("color"),j.getDouble("height"));}
     }
@@ -51,6 +51,11 @@ public final class CreativeEngine {
                 double[] aa={a,a+Math.PI/s.detail,a,a-Math.PI/s.detail};float[] rr={rad+45,rad-15,rad-65,rad-15};
                 for(int k=0;k<4;k++){p[k*2]=512+(float)Math.cos(aa[k])*rr[k];p[k*2+1]=512+(float)Math.sin(aa[k])*rr[k];}out.add(new Shape(tint(s.color,0.45+layer*0.12),p));
             }
+        }else if(s.kind.equals("waves")){
+            double phase=r.nextDouble()*Math.PI*2;
+            for(int band=0;band<12;band++){float[] p=new float[260];for(int i=0;i<65;i++){float x=i*16;float y=(float)(band*88+45*Math.sin(i*0.08+s.detail*0.04+phase)+22*Math.sin(i*0.16+band*0.3));p[i*2]=x;p[i*2+1]=y;int j=129-i;p[j*2]=x;p[j*2+1]=y+72;}out.add(new Shape(tint(s.color,0.4+band*0.055),p));}
+        }else if(s.kind.equals("mosaic")){
+            float step=1024f/s.detail;for(int y=0;y<s.detail;y++)for(int x=0;x<s.detail;x++){float a=x*step,b=y*step;out.add(new Shape(tint(s.color,0.35+r.nextDouble()*0.65),a,b,a+step,b,a,b+step));out.add(new Shape(tint(s.color,0.35+r.nextDouble()*0.65),a+step,b,a+step,b+step,a,b+step));}
         }else{
             float cx=150+r.nextInt(700),cy=100+r.nextInt(180);float[] sun=new float[64];for(int i=0;i<32;i++){sun[i*2]=cx+(float)Math.cos(i*Math.PI/16)*65;sun[i*2+1]=cy+(float)Math.sin(i*Math.PI/16)*65;}out.add(new Shape(0xffffcc73,sun));
             for(int layer=0;layer<5;layer++){float[] p=new float[(s.detail+3)*2];p[0]=0;p[1]=1024;for(int i=0;i<=s.detail;i++){p[(i+1)*2]=1024f*i/s.detail;p[(i+1)*2+1]=320+layer*115+r.nextInt(170);}p[p.length-2]=1024;p[p.length-1]=1024;out.add(new Shape(tint(s.color,0.55+layer*0.12),p));}
@@ -58,8 +63,11 @@ public final class CreativeEngine {
     }
     static int tint(int c,double f){return Color.rgb(Math.min(255,(int)(Color.red(c)*f)),Math.min(255,(int)(Color.green(c)*f)),Math.min(255,(int)(Color.blue(c)*f)));}
     public static String svg(Spec s){if(s.mesh())throw new IllegalArgumentException("SVG chỉ dành cho ảnh 2D");StringBuilder b=new StringBuilder("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1024\" height=\"1024\" viewBox=\"0 0 1024 1024\"><rect width=\"1024\" height=\"1024\" fill=\"#101c30\"/>");for(Shape sh:shapes(s)){b.append(String.format(Locale.ROOT,"<polygon fill=\"#%06x\" points=\"",sh.color&0xffffff));for(int i=0;i<sh.xy.length;i+=2)b.append(String.format(Locale.ROOT,"%.3f,%.3f ",sh.xy[i],sh.xy[i+1]));b.append("\"/>");}return b.append("</svg>").toString();}
-    public static Bitmap render(Spec s,int size,double yaw,double pitch){if(size<64||size>2048||!Double.isFinite(yaw)||!Double.isFinite(pitch))throw new IllegalArgumentException("Kích thước/góc không hợp lệ");Bitmap b=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);Canvas c=new Canvas(b);draw(c,size,size,s,yaw,pitch);return b;}
-    public static void draw(Canvas c,int w,int h,Spec s,double yaw,double pitch){c.drawColor(0xff101c30);Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);c.save();c.translate((w-Math.min(w,h))/2f,(h-Math.min(w,h))/2f);c.scale(Math.min(w,h)/1024f,Math.min(w,h)/1024f);
+    public static String svg(Spec s,int size,boolean transparent){if(size!=512&&size!=1024&&size!=2048)throw new IllegalArgumentException("Kích thước không hợp lệ");String result=svg(s).replace("width=\"1024\" height=\"1024\" viewBox", "width=\""+size+"\" height=\""+size+"\" viewBox");return transparent?result.replace("<rect width=\"1024\" height=\"1024\" fill=\"#101c30\"/>",""):result;}
+    public static Bitmap render(Spec s,int size,double yaw,double pitch){return render(s,size,yaw,pitch,false);}
+    public static Bitmap render(Spec s,int size,double yaw,double pitch,boolean transparent){if(size<64||size>2048||!Double.isFinite(yaw)||!Double.isFinite(pitch))throw new IllegalArgumentException("Kích thước/góc không hợp lệ");Bitmap b=Bitmap.createBitmap(size,size,Bitmap.Config.ARGB_8888);Canvas c=new Canvas(b);draw(c,size,size,s,yaw,pitch,transparent);return b;}
+    public static void draw(Canvas c,int w,int h,Spec s,double yaw,double pitch){draw(c,w,h,s,yaw,pitch,false);}
+    public static void draw(Canvas c,int w,int h,Spec s,double yaw,double pitch,boolean transparent){if(!transparent)c.drawColor(0xff101c30);Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);c.save();c.translate((w-Math.min(w,h))/2f,(h-Math.min(w,h))/2f);c.scale(Math.min(w,h)/1024f,Math.min(w,h)/1024f);
         if(!s.mesh()){for(Shape sh:shapes(s)){p.setColor(sh.color);polygon(c,p,sh.xy);}}
         else{Mesh m=mesh(s);ArrayList<double[]> projected=new ArrayList<>();for(double[] v:m.vertices){double x=v[0]*Math.cos(yaw)+v[2]*Math.sin(yaw),z=-v[0]*Math.sin(yaw)+v[2]*Math.cos(yaw);double y=v[1]*Math.cos(pitch)-z*Math.sin(pitch);z=v[1]*Math.sin(pitch)+z*Math.cos(pitch);projected.add(new double[]{512+x*190/Math.max(1,s.height),512-y*190/Math.max(1,s.height),z});}
             ArrayList<int[]> ordered=new ArrayList<>(m.faces);ordered.sort(Comparator.comparingDouble(f->projected.get(f[0])[2]+projected.get(f[1])[2]+projected.get(f[2])[2]));
@@ -67,8 +75,10 @@ public final class CreativeEngine {
         }c.restore();
     }
     static void polygon(Canvas c,Paint p,float[] xy){Path path=new Path();path.moveTo(xy[0],xy[1]);for(int i=2;i<xy.length;i+=2)path.lineTo(xy[i],xy[i+1]);path.close();c.drawPath(path,p);}
-    public static void zip(Spec s,OutputStream output)throws Exception{
-        try(ZipOutputStream z=new ZipOutputStream(output)){entry(z,"project.bia-art.json",s.json().getBytes(StandardCharsets.UTF_8));entry(z,s.mesh()?"model.obj":"image.svg",(s.mesh()?mesh(s).obj():svg(s)).getBytes(StandardCharsets.UTF_8));Bitmap b=render(s,1024,0.65,0.35);try{z.putNextEntry(new ZipEntry("preview.png"));if(!b.compress(Bitmap.CompressFormat.PNG,100,z))throw new IOException("PNG thất bại");z.closeEntry();}finally{b.recycle();}entry(z,"README.txt",("BIA V140 — đồ họa thủ tục offline.\nPNG 1024×1024; SVG vector hoặc OBJ tam giác, Y hướng lên, đơn vị tùy chọn.\nOBJ chỉ có hình học, không texture/rig/animation. Bình là khối kín trang trí, không có lòng rỗng.\nproject.bia-art.json lưu tham số để mở lại trong BIA.\nKhông phải mô hình tạo ảnh học máy hoặc tái dựng 3D từ ảnh. Kiểm tra trước khi sản xuất/in 3D.\n").getBytes(StandardCharsets.UTF_8));}
+    public static void zip(Spec s,OutputStream output)throws Exception{zip(s,output,1024,false,0.65,0.35);}
+    public static void zip(Spec s,OutputStream output,int size,boolean transparent,double yaw,double pitch)throws Exception{
+        if(size!=512&&size!=1024&&size!=2048)throw new IllegalArgumentException("Kích thước không hợp lệ");
+        try(ZipOutputStream z=new ZipOutputStream(output)){entry(z,"project.bia-art.json",s.json().getBytes(StandardCharsets.UTF_8));entry(z,s.mesh()?"model.obj":"image.svg",(s.mesh()?mesh(s).obj():svg(s,size,transparent)).getBytes(StandardCharsets.UTF_8));Bitmap b=render(s,size,yaw,pitch,transparent);try{z.putNextEntry(new ZipEntry("preview.png"));if(!b.compress(Bitmap.CompressFormat.PNG,100,z))throw new IOException("PNG thất bại");z.closeEntry();}finally{b.recycle();}entry(z,"README.txt",("BIA V141 — đồ họa thủ tục offline.\nPNG "+size+"×"+size+"; nền trong suốt="+transparent+"; yaw="+yaw+"; pitch="+pitch+"; SVG vector hoặc OBJ tam giác, Y hướng lên, đơn vị tùy chọn.\nOBJ chỉ có hình học, không texture/rig/animation. Bình là khối kín trang trí, không có lòng rỗng.\nproject.bia-art.json lưu tham số để mở lại trong BIA.\nKhông phải mô hình tạo ảnh học máy hoặc tái dựng 3D từ ảnh. Kiểm tra trước khi sản xuất/in 3D.\n").getBytes(StandardCharsets.UTF_8));}
     }
     static void entry(ZipOutputStream z,String name,byte[] bytes)throws IOException{z.putNextEntry(new ZipEntry(name));z.write(bytes);z.closeEntry();}
 }
