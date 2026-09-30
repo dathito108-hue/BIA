@@ -101,7 +101,7 @@ pub fn parse_goal(input: &str) -> Option<ImplicitDialogueGoal> {
         "ket luan cuoi",
         "chot ket luan",
         "vay chot lai di",
-    ].iter().any(|x|bare==*x) {
+    ].contains(&bare) {
         return Some(ImplicitDialogueGoal::Conclude);
     }
 
