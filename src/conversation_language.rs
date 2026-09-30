@@ -13,7 +13,7 @@ pub fn understand(input:&str)->Option<Frame>{
   if !changed {break}
  }
  let mut bare_owned=s.trim_end_matches(['?','!','.']).trim().to_string();
- for suffix in [" dung khong"," phai khong"," nhi"," nhe"," a"," vay"] {
+ for suffix in [" dung khong"," phai khong"," nhi"," nhe"," a"] {
   if let Some(rest)=bare_owned.strip_suffix(suffix) {
    bare_owned=if suffix==" dung khong"||suffix==" phai khong"{format!("{rest} khong")}else{rest.to_string()};
    break
