@@ -77,10 +77,10 @@ impl SemanticReasoner {
     ) -> (OpenAnswer, DuyenWeave) {
         match query.kind {
             QueryKind::Causal => {
-                let verdict = self
+                let (verdict, paths) = self
                     .causal
-                    .infer_between(world, query.subject.id, query.object.id);
-                answer_causal(verdict, query.subject.id)
+                    .infer_between_with_paths(world, query.subject.id, query.object.id);
+                answer_causal(verdict, paths, query.subject.id)
             }
             QueryKind::CounterfactualWithout => {
                 let verdict =
@@ -102,8 +102,12 @@ impl SemanticReasoner {
     }
 }
 
-fn answer_causal(verdict: ReasoningVerdict, source: u64) -> (OpenAnswer, DuyenWeave) {
-    let weave = DuyenWeave::from_paths(&verdict.paths, verdict.target);
+fn answer_causal(
+    verdict: ReasoningVerdict,
+    paths: Vec<crate::reasoning::CausalPath>,
+    source: u64,
+) -> (OpenAnswer, DuyenWeave) {
+    let weave = DuyenWeave::from_paths(&paths, verdict.target);
     if verdict.contradicted {
         return (
             OpenAnswer::Contradicted {
