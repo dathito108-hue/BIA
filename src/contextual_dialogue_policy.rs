@@ -47,7 +47,7 @@ impl ContextualDialoguePolicy {
 
         for (action, score) in &mut scored {
             *score += match action {
-                DialogueAction::Explain => (weave.depth as i32).min(3) * 8,
+                DialogueAction::Explain => (weave.max_depth as i32).min(3) * 8,
                 DialogueAction::Ground => (evidence.min(4) as i32) * 12,
                 DialogueAction::Contrast => (overlap * 40.0) as i32,
                 DialogueAction::Qualify => (uncertainty * 50.0) as i32,
