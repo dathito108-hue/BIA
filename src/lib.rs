@@ -1629,3 +1629,5 @@ pub mod product_studio;
 pub mod core_tools;
 
 pub mod general_training;
+
+pub mod conversation_language;
