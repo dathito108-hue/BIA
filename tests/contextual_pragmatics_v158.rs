@@ -34,7 +34,7 @@ fn refuses_ellipsis_when_entity_has_both_semantic_roles() {
     c.handle("Mưa có gây ra đường trơn không?");
 
     let r = c.handle("Thế còn bùn thì sao?").expect("clarify");
-    assert!(r.contains("nguyên nhân hoặc kết quả"), "{r}");
+    assert!(r.contains("nguyên nhân hay kết quả"), "{r}");
     assert!(r.contains("bun"), "{r}");
 }
 
