@@ -134,6 +134,31 @@ impl IntegratedCognition {
     fn conversation(&mut self,input:&str)->Option<String>{
         use crate::conversation_language::{understand,Frame};
         let normalized = normalize(input).trim().trim_end_matches(['?','!','.']).to_string();
+        if let Some(plan)=crate::compositional_dialogue::CompositeDialoguePlan::parse(input) {
+            use crate::compositional_dialogue::DialogueGoal;
+            let Some(current)=self.last_question.clone() else {
+                return Some("Chưa có câu hỏi hiện tại để ghép nhiều mục tiêu giao tiếp.".into());
+            };
+            let previous=self.continuity.previous().map(|turn|turn.question.clone());
+            let mut parts=Vec::new();
+            if plan.contains(DialogueGoal::ExplainCurrent) {
+                let deep=self.answer_styled(&current,crate::expression_style::ExpressionStyle::Deep);
+                parts.push(format!("Giải thích hiện tại: {deep}"));
+            }
+            if plan.contains(DialogueGoal::ComparePrevious) {
+                let Some(previous)=previous else {
+                    return Some("Chưa có trường hợp trước đủ rõ để so sánh.".into());
+                };
+                let prior=self.answer_styled(&previous,crate::expression_style::ExpressionStyle::Standard);
+                let current_standard=self.answer_styled(&current,crate::expression_style::ExpressionStyle::Standard);
+                parts.push(format!("Đối chiếu: trường hợp trước — {prior} Trường hợp hiện tại — {current_standard}"));
+            }
+            if plan.contains(DialogueGoal::Summarize) {
+                let brief=self.answer_styled(&current,crate::expression_style::ExpressionStyle::Brief);
+                parts.push(format!("Tóm tắt: {brief}"));
+            }
+            return Some(parts.join("\n"));
+        }
         if let Some(body)=normalized.strip_prefix("y toi la ") {
             if let Some((replacement,rejected))=body.split_once(" chu khong phai ") {
                 let Some(q)=self.continuity.correct_last_entity(replacement,rejected) else {
