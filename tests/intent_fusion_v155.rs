@@ -11,10 +11,11 @@ fn fuses_focus_exclusion_and_previous_conclusion() {
     let r = c
         .handle("Giải thích nhưng tập trung vào sóng, bỏ phần so sánh và kết luận theo trường hợp trước")
         .expect("fused");
-    assert!(r.contains("Trọng tâm:"), "{r}");
-    assert!(r.contains("Giải thích:"), "{r}");
-    assert!(r.contains("Kết luận theo trường hợp trước:"), "{r}");
-    assert!(!r.contains("Đối chiếu:"), "{r}");
+    assert!(r.contains("giữ trọng tâm"), "{r}");
+    assert!(r.contains("Trước hết"), "{r}");
+    assert!(r.contains("mốc tham chiếu"), "{r}");
+    assert!(!r.contains("Đặt cạnh trường hợp trước"), "{r}");
+    assert!(!r.contains("Giải thích:"), "{r}");
 }
 
 #[test]
