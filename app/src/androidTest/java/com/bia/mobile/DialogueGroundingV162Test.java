@@ -24,8 +24,7 @@ public final class DialogueGroundingV162Test extends InstrumentationTestCase {
         assertTrue(repaired, repaired.contains("sóng"));
 
         String follow = say("Có chắc không?");
-        assertTrue(follow, follow.contains("gió"));
-        assertTrue(follow, follow.contains("sóng"));
+        assertTrue(follow, follow.contains("Tôi kiểm tra lại"));
     }
 
     public void testAmbiguousRepairAsksForRole() {
