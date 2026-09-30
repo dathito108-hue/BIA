@@ -491,7 +491,7 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         }));
         panel.addView(actionTile("Lưu trạng thái", "Ký ức • liên tục • phục hồi sau restart", v -> {
             nativeSave(memoryPath);
-            saveContinuity();
+            saveContinuity(nativeExportContinuity());
             Toast.makeText(this, "Đã lưu trạng thái BIA", Toast.LENGTH_SHORT).show();
         }));
         return panel;
