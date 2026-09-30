@@ -153,9 +153,8 @@ impl IntegratedCognition {
             },
             Frame::Explain|Frame::Brief=>{
                 let Some(q)=self.last_question.clone() else{return Some("Bạn muốn tôi giải thích câu hỏi nào? Hãy nêu lại nội dung.".into())};
-                let reply=self.answer(&q);
-                // A short answer keeps the verdict and uncertainty, removes only path/source detail.
-                Some(if matches!(frame,Frame::Brief){reply.split(" Đường suy luận:").next().unwrap_or(&reply).split(" Đã xét các nguồn:").next().unwrap_or(&reply).to_string()}else{reply})
+                let style=if matches!(frame,Frame::Brief){crate::expression_style::ExpressionStyle::Brief}else{crate::expression_style::ExpressionStyle::Deep};
+                Some(self.answer_styled(&q,style))
             },
             Frame::Sources=>{
                 let Some(q)=self.last_question.clone() else{return Some("Chưa có câu hỏi gần đây để xác định nguồn. Bạn muốn kiểm tra điều gì?".into())};
@@ -404,6 +403,10 @@ impl IntegratedCognition {
     }
 
     fn answer(&mut self, question: &str) -> String {
+        self.answer_styled(question, crate::expression_style::ExpressionStyle::Standard)
+    }
+
+    fn answer_styled(&mut self, question: &str, style: crate::expression_style::ExpressionStyle) -> String {
         let mut question = question.to_string();
         for prefix in ["no ", "dieu do "] {
             if let Some(rest) = question.strip_prefix(prefix) {
@@ -487,14 +490,16 @@ impl IntegratedCognition {
                 if parsed.clauses.iter().take(8).any(|clause|path.windows(2).any(|pair|pair[0]==clause.subject.id&&pair[1]==clause.object.id)) {self.last_evidence.push(source.name.clone());}
             }
         }
-        let generated = GenerativeCognition.render_with_weave(&answer, 1.0 - review.final_confidence, &weave);
+        let generated = GenerativeCognition.render_with_style(&answer, 1.0 - review.final_confidence, &weave, style);
         let mut text=format!("Về quan hệ giữa “{}” và “{}”: {}",query.subject.text,query.object.text,generated.text);
-        if let OpenAnswer::Supported{path,..}|OpenAnswer::Opposed{path,..}=&answer {
-            let named:Vec<_>=path.iter().filter_map(|id|labels.get(id).cloned()).collect();
-            if named.len()==path.len(){text.push_str(&format!(" Đường suy luận: {}. Đây là quan hệ trong nguồn đã ghi, chưa phải xác minh độc lập.",named.join(" → ")));}
-        }
-        if !consulted.is_empty() {
-            text.push_str(&format!(" Đã xét các nguồn: {}.", consulted.join(", ")));
+        if style != crate::expression_style::ExpressionStyle::Brief {
+            if let OpenAnswer::Supported{path,..}|OpenAnswer::Opposed{path,..}=&answer {
+                let named:Vec<_>=path.iter().filter_map(|id|labels.get(id).cloned()).collect();
+                if named.len()==path.len(){text.push_str(&format!(" Đường suy luận: {}. Đây là quan hệ trong nguồn đã ghi, chưa phải xác minh độc lập.",named.join(" → ")));}
+            }
+            if !consulted.is_empty() {
+                text.push_str(&format!(" Đã xét các nguồn: {}.", consulted.join(", ")));
+            }
         }
         text
     }

@@ -1,5 +1,6 @@
-use crate::duyen_weave::DuyenWeave;
 use crate::discourse_generator::{DiscourseMove, DiscoursePlan};
+use crate::duyen_weave::DuyenWeave;
+use crate::expression_style::ExpressionStyle;
 use crate::open_reasoning::OpenAnswer;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -33,12 +34,22 @@ impl GenerativeCognition {
         uncertainty: f32,
         weave: &DuyenWeave,
     ) -> GeneratedThought {
+        self.render_with_style(answer, uncertainty, weave, ExpressionStyle::Standard)
+    }
+
+    pub fn render_with_style(
+        &self,
+        answer: &OpenAnswer,
+        uncertainty: f32,
+        weave: &DuyenWeave,
+        style: ExpressionStyle,
+    ) -> GeneratedThought {
         let plan = DiscoursePlan::build(answer, weave);
         match answer {
             OpenAnswer::Supported { confidence, path } => {
                 let confidence = calibrated(*confidence, uncertainty);
                 GeneratedThought {
-                    text: compose_supported(confidence, path.len().saturating_sub(1), weave, &plan),
+                    text: compose_supported(confidence, path.len().saturating_sub(1), weave, &plan, style),
                     stance: if confidence >= 0.75 { ResponseStance::Certain } else { ResponseStance::Cautious },
                     confidence,
                     evidence_depth: path.len().saturating_sub(1),
@@ -47,7 +58,7 @@ impl GenerativeCognition {
             OpenAnswer::Opposed { confidence, path } => {
                 let confidence = calibrated(*confidence, uncertainty);
                 GeneratedThought {
-                    text: compose_opposed(confidence, path.len().saturating_sub(1), weave, &plan),
+                    text: compose_opposed(confidence, path.len().saturating_sub(1), weave, &plan, style),
                     stance: ResponseStance::Cautious,
                     confidence,
                     evidence_depth: path.len().saturating_sub(1),
@@ -55,44 +66,84 @@ impl GenerativeCognition {
             }
             OpenAnswer::Contradicted { support, opposition } => {
                 let conflict = support.min(*opposition);
+                let text = match style {
+                    ExpressionStyle::Brief => format!(
+                        "Các Duyên đang xung đột: ủng hộ {:.0}%, phản đối {:.0}%.",
+                        support * 100.0,
+                        opposition * 100.0
+                    ),
+                    ExpressionStyle::Standard => {
+                        if weave.supporting_paths + weave.opposing_paths > 1 {
+                            format!(
+                                "Các Duyên đang xung đột: {} nhánh ủng hộ và {} nhánh phản đối cùng hội tụ vào kết quả; sức ủng hộ {:.0}% và phản đối {:.0}%. Tôi giữ cả hai hướng và cần thêm bằng chứng trước khi kết luận.",
+                                weave.supporting_paths,
+                                weave.opposing_paths,
+                                support * 100.0,
+                                opposition * 100.0
+                            )
+                        } else {
+                            format!(
+                                "Các Duyên đang xung đột: nhánh ủng hộ {:.0}% nhưng nhánh phản đối cũng đạt {:.0}%. Tôi giữ cả hai giả thuyết và cần thêm bằng chứng trước khi kết luận.",
+                                support * 100.0,
+                                opposition * 100.0
+                            )
+                        }
+                    }
+                    ExpressionStyle::Deep => format!(
+                        "Các Duyên đang xung đột: {} nhánh ủng hộ, {} nhánh phản đối, {} điểm hội tụ và {} liên kết dùng chung. Sức ủng hộ {:.0}%, phản đối {:.0}%. Cấu trúc này chưa cho phép quy về một nguyên nhân duy nhất.",
+                        weave.supporting_paths,
+                        weave.opposing_paths,
+                        weave.convergence_nodes.len(),
+                        weave.shared_links,
+                        support * 100.0,
+                        opposition * 100.0
+                    ),
+                };
                 GeneratedThought {
-                    text: if weave.supporting_paths + weave.opposing_paths > 1 {
-                        format!(
-                            "Các Duyên đang xung đột: {} nhánh ủng hộ và {} nhánh phản đối cùng hội tụ vào kết quả; sức ủng hộ {:.0}% và phản đối {:.0}%. Tôi giữ cả hai hướng và cần thêm bằng chứng trước khi kết luận.",
-                            weave.supporting_paths,
-                            weave.opposing_paths,
-                            support * 100.0,
-                            opposition * 100.0
-                        )
-                    } else {
-                        format!(
-                            "Các Duyên đang xung đột: nhánh ủng hộ {:.0}% nhưng nhánh phản đối cũng đạt {:.0}%. Tôi giữ cả hai giả thuyết và cần thêm bằng chứng trước khi kết luận.",
-                            support * 100.0,
-                            opposition * 100.0
-                        )
-                    },
+                    text,
                     stance: ResponseStance::Contradictory,
                     confidence: (1.0 - conflict).clamp(0.0,1.0),
                     evidence_depth: weave.max_depth,
                 }
             }
-            OpenAnswer::Counterfactual { support_delta, factual_support, counterfactual_support } => GeneratedThought {
-                text: format!(
-                    "Khi loại điều kiện đang xét, sức ủng hộ thay đổi {:.0} điểm phần trăm, từ {:.0}% còn {:.0}%. Điều này cho thấy điều kiện đó có ảnh hưởng {}.",
-                    support_delta * 100.0,
-                    factual_support * 100.0,
-                    counterfactual_support * 100.0,
-                    if *support_delta > 0.35 { "mạnh" } else { "đáng kể nhưng chưa tuyệt đối" }
-                ),
-                stance: ResponseStance::Counterfactual,
-                confidence: factual_support.max(*counterfactual_support).clamp(0.0,1.0),
-                evidence_depth: 1,
-            },
+            OpenAnswer::Counterfactual { support_delta, factual_support, counterfactual_support } => {
+                let text = match style {
+                    ExpressionStyle::Brief => format!(
+                        "Loại điều kiện này làm sức ủng hộ đổi khoảng {:.0} điểm phần trăm.",
+                        support_delta * 100.0
+                    ),
+                    ExpressionStyle::Standard => format!(
+                        "Khi loại điều kiện đang xét, sức ủng hộ thay đổi {:.0} điểm phần trăm, từ {:.0}% còn {:.0}%. Điều này cho thấy điều kiện đó có ảnh hưởng {}.",
+                        support_delta * 100.0,
+                        factual_support * 100.0,
+                        counterfactual_support * 100.0,
+                        if *support_delta > 0.35 { "mạnh" } else { "đáng kể nhưng chưa tuyệt đối" }
+                    ),
+                    ExpressionStyle::Deep => format!(
+                        "Phản thực cho thấy khi bỏ điều kiện đang xét, sức ủng hộ đổi {:.0} điểm phần trăm: từ {:.0}% xuống {:.0}%. Vì vậy điều kiện này có đóng góp đo được, nhưng mức thay đổi chưa tự chứng minh nó là nguyên nhân duy nhất.",
+                        support_delta * 100.0,
+                        factual_support * 100.0,
+                        counterfactual_support * 100.0
+                    ),
+                };
+                GeneratedThought {
+                    text,
+                    stance: ResponseStance::Counterfactual,
+                    confidence: factual_support.max(*counterfactual_support).clamp(0.0,1.0),
+                    evidence_depth: 1,
+                }
+            }
             OpenAnswer::Unknown => GeneratedThought {
-                text: if uncertainty > 0.65 {
-                    "Tôi chưa có đủ Duyên để kết luận. Bước hợp lý là thu thêm bằng chứng hoặc truy hồi ký ức liên quan.".to_string()
-                } else {
-                    "Tri thức hiện có chưa tạo thành một cấu trúc nhân–duyên đủ mạnh để trả lời chắc chắn.".to_string()
+                text: match style {
+                    ExpressionStyle::Brief => "Chưa đủ Duyên để kết luận.".to_string(),
+                    ExpressionStyle::Standard => {
+                        if uncertainty > 0.65 {
+                            "Tôi chưa có đủ Duyên để kết luận. Bước hợp lý là thu thêm bằng chứng hoặc truy hồi ký ức liên quan.".to_string()
+                        } else {
+                            "Tri thức hiện có chưa tạo thành một cấu trúc nhân–duyên đủ mạnh để trả lời chắc chắn.".to_string()
+                        }
+                    }
+                    ExpressionStyle::Deep => "Tôi chưa có đủ cấu trúc nhân–duyên để kết luận. Cần thêm nguồn nối trực tiếp hoặc gián tiếp giữa hai đối tượng, hoặc thêm bằng chứng có thể phân biệt nhánh ủng hộ và phản đối.".to_string(),
                 },
                 stance: ResponseStance::Unknown,
                 confidence: (1.0 - uncertainty).clamp(0.0,0.5),
@@ -106,7 +157,13 @@ fn calibrated(confidence: f32, uncertainty: f32) -> f32 {
     (confidence * (1.0 - uncertainty.clamp(0.0,1.0) * 0.35)).clamp(0.0,1.0)
 }
 
-fn compose_supported(confidence: f32, depth: usize, weave: &DuyenWeave, plan: &DiscoursePlan) -> String {
+fn compose_supported(
+    confidence: f32,
+    depth: usize,
+    weave: &DuyenWeave,
+    plan: &DiscoursePlan,
+    style: ExpressionStyle,
+) -> String {
     let opening = if confidence >= 0.85 {
         "Các Duyên hiện tại ủng hộ mạnh kết luận này."
     } else if confidence >= 0.65 {
@@ -114,6 +171,9 @@ fn compose_supported(confidence: f32, depth: usize, weave: &DuyenWeave, plan: &D
     } else {
         "Có tín hiệu ủng hộ, nhưng mức chắc chắn vẫn còn giới hạn."
     };
+    if style == ExpressionStyle::Brief {
+        return format!("{} Mức chắc chắn khoảng {:.0}%.", opening, confidence * 100.0);
+    }
     if weave.is_overlapping() {
         let mut text = format!(
             "{} Có {} nhánh Duyên cùng tham gia và {} điểm hội tụ; nhánh rõ nhất sâu {} mắt xích.",
@@ -125,26 +185,50 @@ fn compose_supported(confidence: f32, depth: usize, weave: &DuyenWeave, plan: &D
         if plan.moves.contains(&DiscourseMove::Opposition) {
             text.push_str(" Một phần Duyên có tác dụng phản chiều nên không nên quy kết kết quả cho một nguyên nhân duy nhất.");
         }
+        if style == ExpressionStyle::Deep {
+            text.push_str(&format!(
+                " Mạng còn có {} liên kết dùng chung giữa các nhánh; mức chồng lấp {:.0}%.",
+                weave.shared_links,
+                weave.overlap_score * 100.0
+            ));
+        }
         if plan.moves.contains(&DiscourseMove::Limitation) {
             text.push_str(&format!(" Mức chắc chắn hiện khoảng {:.0}%.", confidence * 100.0));
         }
         text
     } else {
-        format!(
-            "{} Tôi tìm được chuỗi suy luận gồm {} mắt xích với độ tin cậy khoảng {:.0}%.",
-            opening,
-            depth,
-            confidence * 100.0
-        )
+        match style {
+            ExpressionStyle::Deep => format!(
+                "{} Đường hiện rõ nhất có {} mắt xích và chưa có nhánh hội tụ khác đủ mạnh. Độ tin cậy khoảng {:.0}%.",
+                opening,
+                depth,
+                confidence * 100.0
+            ),
+            _ => format!(
+                "{} Tôi tìm được chuỗi suy luận gồm {} mắt xích với độ tin cậy khoảng {:.0}%.",
+                opening,
+                depth,
+                confidence * 100.0
+            ),
+        }
     }
 }
 
-fn compose_opposed(confidence: f32, depth: usize, weave: &DuyenWeave, plan: &DiscoursePlan) -> String {
+fn compose_opposed(
+    confidence: f32,
+    depth: usize,
+    weave: &DuyenWeave,
+    plan: &DiscoursePlan,
+    style: ExpressionStyle,
+) -> String {
     let opening = if confidence >= 0.80 {
         "Bằng chứng phản đối đang chiếm ưu thế."
     } else {
         "Hiện có nhiều Duyên phản đối hơn Duyên ủng hộ."
     };
+    if style == ExpressionStyle::Brief {
+        return format!("{} Mức chắc chắn khoảng {:.0}%.", opening, confidence * 100.0);
+    }
     if weave.is_overlapping() {
         let mut text = format!(
             "{} Có {} nhánh Duyên chồng lấp, trong đó {} nhánh mang tác dụng ức chế/phản đối; độ sâu lớn nhất {} mắt xích.",
@@ -153,16 +237,32 @@ fn compose_opposed(confidence: f32, depth: usize, weave: &DuyenWeave, plan: &Dis
             weave.opposing_paths,
             weave.max_depth.max(depth)
         );
+        if style == ExpressionStyle::Deep {
+            text.push_str(&format!(
+                " Có {} điểm hội tụ, {} liên kết dùng chung và mức chồng lấp {:.0}%.",
+                weave.convergence_nodes.len(),
+                weave.shared_links,
+                weave.overlap_score * 100.0
+            ));
+        }
         if plan.moves.contains(&DiscourseMove::Limitation) {
             text.push_str(&format!(" Mức chắc chắn hiện khoảng {:.0}%.", confidence * 100.0));
         }
         text
     } else {
-        format!(
-            "{} Chuỗi phản chứng có {} mắt xích, độ tin cậy khoảng {:.0}%.",
-            opening,
-            depth,
-            confidence * 100.0
-        )
+        match style {
+            ExpressionStyle::Deep => format!(
+                "{} Đường phản chứng rõ nhất có {} mắt xích, chưa thấy nhánh hội tụ đối trọng đủ mạnh; độ tin cậy khoảng {:.0}%.",
+                opening,
+                depth,
+                confidence * 100.0
+            ),
+            _ => format!(
+                "{} Chuỗi phản chứng có {} mắt xích, độ tin cậy khoảng {:.0}%.",
+                opening,
+                depth,
+                confidence * 100.0
+            ),
+        }
     }
 }
