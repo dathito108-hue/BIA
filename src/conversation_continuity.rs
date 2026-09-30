@@ -7,6 +7,15 @@ pub struct DiscourseTurn {
     pub object: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RelationContinuity {
+    New,
+    Repeat,
+    SameSubject,
+    SameObject,
+    Return,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct ConversationContinuity {
     turns: Vec<DiscourseTurn>,
@@ -19,8 +28,8 @@ impl ConversationContinuity {
             subject: subject.to_string(),
             object: object.to_string(),
         });
-        if self.turns.len() > 6 {
-            let overflow = self.turns.len() - 6;
+        if self.turns.len() > 12 {
+            let overflow = self.turns.len() - 12;
             self.turns.drain(0..overflow);
         }
     }
@@ -31,6 +40,42 @@ impl ConversationContinuity {
 
     pub fn previous(&self) -> Option<&DiscourseTurn> {
         self.turns.len().checked_sub(2).and_then(|i| self.turns.get(i))
+    }
+
+    pub fn relation_continuity(&self, subject: &str, object: &str) -> RelationContinuity {
+        let subject = normalize(subject);
+        let object = normalize(object);
+        let Some(last) = self.last() else {
+            return RelationContinuity::New;
+        };
+
+        if last.subject == subject && last.object == object {
+            return RelationContinuity::Repeat;
+        }
+        if last.subject == subject {
+            return RelationContinuity::SameSubject;
+        }
+        if last.object == object {
+            return RelationContinuity::SameObject;
+        }
+        if self
+            .turns
+            .iter()
+            .rev()
+            .skip(1)
+            .any(|turn| turn.subject == subject && turn.object == object)
+        {
+            return RelationContinuity::Return;
+        }
+        RelationContinuity::New
+    }
+
+    pub fn relation_seen(&self, subject: &str, object: &str) -> bool {
+        let subject = normalize(subject);
+        let object = normalize(object);
+        self.turns
+            .iter()
+            .any(|turn| turn.subject == subject && turn.object == object)
     }
 
     pub fn correct_last_entity(&mut self, replacement: &str, rejected: &str) -> Option<String> {
@@ -102,5 +147,22 @@ mod tests {
             c.correct_last_entity("duong tron", "duong uot").as_deref(),
             Some("mua co gay ra duong tron khong")
         );
+    }
+
+    #[test]
+    fn classifies_relation_continuity_across_longer_context() {
+        let mut c = ConversationContinuity::default();
+        c.remember("a co gay ra b khong", "a", "b");
+        assert_eq!(c.relation_continuity("a", "b"), RelationContinuity::Repeat);
+        assert_eq!(c.relation_continuity("a", "c"), RelationContinuity::SameSubject);
+        assert_eq!(c.relation_continuity("d", "b"), RelationContinuity::SameObject);
+        c.remember("x co gay ra y khong", "x", "y");
+        assert_eq!(c.relation_continuity("a", "b"), RelationContinuity::Return);
+        assert!(c.relation_seen("a", "b"));
+
+        for i in 0..20 {
+            c.remember(&format!("q{i}"), &format!("s{i}"), &format!("o{i}"));
+        }
+        assert!(c.len() <= 12);
     }
 }
