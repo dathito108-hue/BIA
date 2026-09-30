@@ -65,13 +65,9 @@ pub fn parse(input: &str, current_question: Option<&str>) -> Option<GroundingMov
         }
     }
 
-    let Some(current) = current_question else {
-        return None;
-    };
+    let current = current_question?;
     let scene = VietnameseSemanticParser.parse(current);
-    let Some(query) = scene.query else {
-        return None;
-    };
+    let query = scene.query?;
     let subject = normalize(&query.subject.text);
     let object = normalize(&query.object.text);
 
