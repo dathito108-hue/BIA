@@ -162,9 +162,7 @@ impl IntegratedCognition {
             use crate::dialogue_goal_state::ImplicitDialogueGoal;
             use crate::dialogue_thread::DialogueThreadMove;
             match thread_move {
-                DialogueThreadMove::ExplainCause
-                | DialogueThreadMove::GroundEvidence
-                | DialogueThreadMove::Continue => {
+                DialogueThreadMove::ExplainCause | DialogueThreadMove::Continue => {
                     if let Some(q) = self.last_question.clone() {
                         self.dialogue_goal.advance(ImplicitDialogueGoal::Explore);
                         let deep = self.answer_styled(
@@ -173,11 +171,30 @@ impl IntegratedCognition {
                         );
                         let prefix = match thread_move {
                             DialogueThreadMove::ExplainCause => "Mở rộng theo nhánh nhân/quả từ câu vừa rồi",
-                            DialogueThreadMove::GroundEvidence => "Kiểm tra lại theo bằng chứng của câu vừa rồi",
                             DialogueThreadMove::Continue => "Tiếp tục đúng mạch quan hệ vừa rồi",
                             _ => unreachable!(),
                         };
                         return Some(format!("{prefix}: {deep}"));
+                    }
+                }
+                DialogueThreadMove::GroundEvidence => {
+                    if let Some(q) = self.last_question.clone() {
+                        self.answer_restate(&q);
+                        self.last_source_snapshot = self.relation_source_snapshot(&q);
+                        let mut out = String::from(
+                            "Nguồn của đường suy luận vừa xét (thông tin được báo lại, chưa xác minh độc lập):",
+                        );
+                        for name in &self.last_evidence {
+                            if let Some(source) = self.sources.iter().find(|s| &s.name == name) {
+                                out.push_str(&format!("\n{}: {}", source.name, source.text));
+                            }
+                        }
+                        if self.last_evidence.is_empty() {
+                            out.push_str(
+                                " chưa xác định được đường bằng chứng đơn nhất; hãy xem phần giải thích.",
+                            );
+                        }
+                        return Some(format!("Kiểm tra lại theo bằng chứng của câu vừa rồi. {out}"));
                     }
                 }
                 DialogueThreadMove::Return => {
