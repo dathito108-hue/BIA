@@ -57,6 +57,7 @@ pub struct IntegratedCognition {
     learned_language: crate::learned_language::LearnedLanguage,
     last_evidence: Vec<String>,
     last_source_snapshot: Vec<(String, u64)>,
+    dialogue_goal: crate::dialogue_goal_state::DialogueGoalState,
     bindings: Vec<(String, crate::capability::DeviceAction)>,
     execution_failures: Vec<String>,
 }
@@ -135,6 +136,18 @@ impl IntegratedCognition {
     fn conversation(&mut self,input:&str)->Option<String>{
         use crate::conversation_language::{understand,Frame};
         let normalized = normalize(input).trim().trim_end_matches(['?','!','.']).to_string();
+        if let Some(goal)=crate::dialogue_goal_state::parse_goal(input) {
+            use crate::dialogue_goal_state::ImplicitDialogueGoal;
+            match goal {
+                ImplicitDialogueGoal::Challenge => {
+                    return Some(self.challenge_current_relation());
+                }
+                ImplicitDialogueGoal::Conclude => {
+                    return Some(self.conclude_current_relation());
+                }
+                ImplicitDialogueGoal::Explore | ImplicitDialogueGoal::Verify => {}
+            }
+        }
         if let Some(plan) = crate::dynamic_dialogue_intent::DynamicDialoguePlan::parse(input) {
             return Some(self.execute_dynamic_dialogue_plan(plan));
         }
@@ -159,6 +172,7 @@ impl IntegratedCognition {
                     let Some(q)=self.last_question.clone() else {
                         return Some("Chưa có kết luận gần đây để kiểm tra lại.".into());
                     };
+                    self.dialogue_goal.advance(crate::dialogue_goal_state::ImplicitDialogueGoal::Verify);
                     let deep=self.answer_styled(&q,crate::expression_style::ExpressionStyle::Deep);
                     self.last_source_snapshot=self.relation_source_snapshot(&q);
                     return Some(format!("Tôi kiểm tra lại mà không tăng độ chắc chỉ vì bị hỏi lại. {deep}"));
@@ -167,6 +181,7 @@ impl IntegratedCognition {
                     let Some(q)=self.last_question.clone() else {
                         return Some("Chưa có câu hỏi gần đây để mở rộng.".into());
                     };
+                    self.dialogue_goal.advance(crate::dialogue_goal_state::ImplicitDialogueGoal::Explore);
                     let deep=self.answer_styled(&q,crate::expression_style::ExpressionStyle::Deep);
                     self.last_source_snapshot=self.relation_source_snapshot(&q);
                     return Some(format!("Mở rộng thêm từ cùng mạch bằng chứng: {deep}"));
@@ -182,6 +197,7 @@ impl IntegratedCognition {
                 PragmaticMove::TopicShift(topic) => {
                     self.last_question = None;
                     self.topic = None;
+                    self.dialogue_goal.clear_active();
                     return Some(format!(
                         "Được, chuyển sang chủ đề “{topic}”. Mạch quan hệ trước vẫn được giữ trong lịch sử để bạn có thể quay lại khi cần."
                     ));
@@ -318,6 +334,7 @@ impl IntegratedCognition {
                     return Some("Tôi chưa tìm thấy đối tượng cần sửa trong lượt gần nhất; hãy nêu lại câu hỏi đầy đủ.".into());
                 };
                 self.last_question=Some(q.clone());
+                self.dialogue_goal.bind_relation(&q);
                 let scene=VietnameseSemanticParser.parse(&q);
                 let corrected=scene
                     .query
@@ -349,7 +366,7 @@ impl IntegratedCognition {
             return Some(format!("Đối tượng được nhắc tới là “{entity}”."));
         }
         let expanded=self.learned_language.expand(input);
-        let Some(frame)=understand(expanded.as_deref().unwrap_or(input)) else {self.last_question=None;self.topic=None;return None};
+        let Some(frame)=understand(expanded.as_deref().unwrap_or(input)) else {self.last_question=None;self.topic=None;self.dialogue_goal.clear_active();return None};
         match frame {
             Frame::Alternative{subject,entity}=>{
                 let Some(last)=self.last_question.as_ref() else{return Some("Hãy nêu câu hỏi quan hệ trước khi đổi đối tượng.".into())};
@@ -381,7 +398,7 @@ impl IntegratedCognition {
                 if self.last_evidence.is_empty(){out.push_str(" chưa xác định được đường bằng chứng đơn nhất; hãy xem phần giải thích.");}
                 Some(out)
             },
-            Frame::Reply(text)=>{if text.starts_with("Tôi chưa") {self.last_question=None;self.topic=None;}Some(text.into())},
+            Frame::Reply(text)=>{if text.starts_with("Tôi chưa") {self.last_question=None;self.topic=None;self.dialogue_goal.clear_active();}Some(text.into())},
             Frame::Clarify=>Some("“Nó/điều đó” chưa rõ chỉ đối tượng nào; hãy nêu tên cụ thể.".into()),
         }
     }
@@ -646,6 +663,83 @@ impl IntegratedCognition {
         }
     }
 
+    fn challenge_current_relation(&mut self) -> String {
+        use crate::dialogue_goal_state::ImplicitDialogueGoal;
+        let Some(q)=self.last_question.clone() else {
+            return "Chưa có quan hệ hiện tại để tìm phản chứng.".into();
+        };
+        self.dialogue_goal.advance(ImplicitDialogueGoal::Challenge);
+
+        let reasoner=SemanticReasoner::default();
+        let scene=reasoner.parse(&q);
+        let Some(query)=scene.query else {
+            return "Quan hệ hiện tại chưa đủ rõ để tìm phản chứng.".into();
+        };
+
+        let mut world=WorldGraph::new(1024,512);
+        for source in self.sources.iter().filter(|s|s.kind!=SourceKind::Hypothesis) {
+            let mut parsed=reasoner.parse(&source.text);
+            parsed.query=None;
+            parsed.clauses.truncate(8);
+            let quality:f32=if source.kind==SourceKind::Observation {0.95}else{0.75};
+            for clause in &mut parsed.clauses {
+                clause.confidence*=quality.sqrt();
+            }
+            VietnameseSemanticParser.ingest(&mut world,&parsed,0);
+        }
+
+        let (_,paths)=crate::reasoning::CausalReasoner::new(6,16)
+            .infer_between_with_paths(&world,query.subject.id,query.object.id);
+        let opposing:Vec<_>=paths.iter().filter(|path|path.inhibited).collect();
+        if opposing.is_empty() {
+            return "Tôi đã kiểm tra các nhánh Duyên hiện có nhưng chưa tìm thấy phản chứng nối từ nguyên nhân tới kết quả đang xét.".into();
+        }
+
+        let mut sources=Vec::new();
+        for source in self.sources.iter().filter(|s|s.kind!=SourceKind::Hypothesis) {
+            let parsed=reasoner.parse(&source.text);
+            let contributes=parsed.clauses.iter().take(8).any(|clause|{
+                matches!(clause.kind,crate::types::RelationKind::Inhibits)
+                    && opposing.iter().any(|path|{
+                        path.nodes.windows(2).any(|pair|{
+                            pair[0]==clause.subject.id && pair[1]==clause.object.id
+                        })
+                    })
+            });
+            if contributes && !sources.contains(&source.name) {
+                sources.push(source.name.clone());
+            }
+        }
+
+        if sources.is_empty() {
+            "Có nhánh phản đối trong đồ thị Duyên, nhưng chưa tách được một nguồn ức chế đơn nhất để trình bày; cần xem giải thích sâu.".into()
+        } else {
+            format!(
+                "Có phản chứng trong mạch hiện tại. Nguồn tạo cạnh ức chế trên nhánh phản đối: {}. Tôi giữ nhánh này cùng nhánh ủng hộ thay vì tự loại một phía.",
+                sources.join(", ")
+            )
+        }
+    }
+
+    fn conclude_current_relation(&mut self) -> String {
+        use crate::dialogue_goal_state::ImplicitDialogueGoal;
+        let Some(q)=self.last_question.clone() else {
+            return "Chưa có quan hệ hiện tại để chốt kết luận.".into();
+        };
+        let had_challenge=self.dialogue_goal.has_visited(ImplicitDialogueGoal::Challenge);
+        let had_verify=self.dialogue_goal.has_visited(ImplicitDialogueGoal::Verify);
+        self.dialogue_goal.advance(ImplicitDialogueGoal::Conclude);
+        let brief=self.answer_styled(&q,crate::expression_style::ExpressionStyle::Brief);
+        let prefix=if had_challenge {
+            "Sau bước kiểm tra phản chứng trong mạch này"
+        } else if had_verify {
+            "Sau bước kiểm tra lại"
+        } else {
+            "Theo bằng chứng hiện có"
+        };
+        format!("{prefix}, kết luận hiện tại: {brief}")
+    }
+
     fn execute_dynamic_dialogue_plan(
         &mut self,
         plan: crate::dynamic_dialogue_intent::DynamicDialoguePlan,
@@ -661,6 +755,12 @@ impl IntegratedCognition {
         let expand=plan.contains(DynamicIntent::Expand);
         let acknowledge=plan.contains(DynamicIntent::Acknowledge);
         let confirm=plan.contains(DynamicIntent::Confirm);
+
+        if doubt {
+            self.dialogue_goal.advance(crate::dialogue_goal_state::ImplicitDialogueGoal::Verify);
+        } else if expand {
+            self.dialogue_goal.advance(crate::dialogue_goal_state::ImplicitDialogueGoal::Explore);
+        }
 
         let mut deep_review=None;
         if plan.wants_deep_review() {
@@ -820,6 +920,7 @@ impl IntegratedCognition {
             self.last_question = Some(question.clone());
             self.continuity
                 .remember(&question, &query.subject.text, &query.object.text);
+            self.dialogue_goal.bind_relation(&question);
         }
         let mut labels=std::collections::HashMap::new();
         let mut world = WorldGraph::new(1024, 512);
