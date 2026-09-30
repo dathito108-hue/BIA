@@ -193,10 +193,13 @@ impl IntegratedCognition {
                 return Some("Chưa có câu hỏi hiện tại để ghép nhiều mục tiêu giao tiếp.".into());
             };
             let previous=self.continuity.previous().map(|turn|turn.question.clone());
+            use crate::natural_surface::{NaturalSurfaceRealizer, SurfacePart, SurfaceSection};
             let mut parts=Vec::new();
             if plan.contains(DialogueGoal::ExplainCurrent) {
-                let deep=self.answer_styled(&current,crate::expression_style::ExpressionStyle::Deep);
-                parts.push(format!("Giải thích hiện tại: {deep}"));
+                parts.push(SurfacePart::new(
+                    SurfaceSection::Explain,
+                    self.answer_styled(&current,crate::expression_style::ExpressionStyle::Deep),
+                ));
             }
             if plan.contains(DialogueGoal::ComparePrevious) {
                 let Some(previous)=previous else {
@@ -204,13 +207,18 @@ impl IntegratedCognition {
                 };
                 let prior=self.answer_styled(&previous,crate::expression_style::ExpressionStyle::Standard);
                 let current_standard=self.answer_styled(&current,crate::expression_style::ExpressionStyle::Standard);
-                parts.push(format!("Đối chiếu: trường hợp trước — {prior} Trường hợp hiện tại — {current_standard}"));
+                parts.push(SurfacePart::new(
+                    SurfaceSection::ComparePrevious,
+                    format!("trường hợp trước là: {prior} Còn trường hợp hiện tại là: {current_standard}"),
+                ));
             }
             if plan.contains(DialogueGoal::Summarize) {
-                let brief=self.answer_styled(&current,crate::expression_style::ExpressionStyle::Brief);
-                parts.push(format!("Tóm tắt: {brief}"));
+                parts.push(SurfacePart::new(
+                    SurfaceSection::Summary,
+                    self.answer_styled(&current,crate::expression_style::ExpressionStyle::Brief),
+                ));
             }
-            return Some(parts.join("\n"));
+            return Some(NaturalSurfaceRealizer.compose(None, &parts));
         }
         if let Some(body)=normalized.strip_prefix("y toi la ") {
             if let Some((replacement,rejected))=body.split_once(" chu khong phai ") {
@@ -512,17 +520,18 @@ impl IntegratedCognition {
     }
 
     fn answer(&mut self, question: &str) -> String {
-        self.answer_internal(question, None)
+        self.answer_internal(question, None, true)
     }
 
     fn answer_styled(&mut self, question: &str, style: crate::expression_style::ExpressionStyle) -> String {
-        self.answer_internal(question, Some(style))
+        self.answer_internal(question, Some(style), false)
     }
 
     fn answer_internal(
         &mut self,
         question: &str,
         requested_style: Option<crate::expression_style::ExpressionStyle>,
+        remember_turn: bool,
     ) -> String {
         let mut question = question.to_string();
         for prefix in ["no ", "dieu do "] {
@@ -539,9 +548,15 @@ impl IntegratedCognition {
         let Some(query) = &scene.query else {
             return "Tôi chưa phân tích được câu hỏi này; thử “A có dẫn tới B không?”.".into();
         };
-        self.topic = Some(query.subject.text.clone());
-        self.last_question = Some(question.clone());
-        self.continuity.remember(&question, &query.subject.text, &query.object.text);
+        let relation_continuity = self
+            .continuity
+            .relation_continuity(&query.subject.text, &query.object.text);
+        if remember_turn {
+            self.topic = Some(query.subject.text.clone());
+            self.last_question = Some(question.clone());
+            self.continuity
+                .remember(&question, &query.subject.text, &query.object.text);
+        }
         let mut labels=std::collections::HashMap::new();
         let mut world = WorldGraph::new(1024, 512);
         let mut consulted = Vec::new();
@@ -601,12 +616,17 @@ impl IntegratedCognition {
             }
             _ => {}
         }
-        self.last_evidence.clear();
+        let mut current_evidence=Vec::new();
         if let OpenAnswer::Supported{path,..}|OpenAnswer::Opposed{path,..}=&answer {
             for source in self.sources.iter().filter(|s|s.kind!=SourceKind::Hypothesis){
                 let parsed=reasoner.parse(&source.text);
-                if parsed.clauses.iter().take(8).any(|clause|path.windows(2).any(|pair|pair[0]==clause.subject.id&&pair[1]==clause.object.id)) {self.last_evidence.push(source.name.clone());}
+                if parsed.clauses.iter().take(8).any(|clause|path.windows(2).any(|pair|pair[0]==clause.subject.id&&pair[1]==clause.object.id)) {
+                    current_evidence.push(source.name.clone());
+                }
             }
+        }
+        if remember_turn {
+            self.last_evidence=current_evidence;
         }
         let uncertainty = 1.0 - review.final_confidence;
         let style = requested_style.unwrap_or_else(|| {
@@ -615,20 +635,30 @@ impl IntegratedCognition {
                 .style
         });
         let generated = GenerativeCognition.render_with_style(&answer, uncertainty, &weave, style);
-        let mut text=crate::natural_surface::NaturalSurfaceRealizer.relation(
+        let mut text=crate::natural_surface::NaturalSurfaceRealizer.relation_contextual(
             &query.subject.text,
             &query.object.text,
             &generated.text,
             style,
             &weave,
+            relation_continuity,
         );
+        let explicit_deep = requested_style == Some(crate::expression_style::ExpressionStyle::Deep);
+        let suppress_repeated_details = matches!(
+            relation_continuity,
+            crate::conversation_continuity::RelationContinuity::Repeat
+        ) && !explicit_deep;
         if style != crate::expression_style::ExpressionStyle::Brief {
-            if let OpenAnswer::Supported{path,..}|OpenAnswer::Opposed{path,..}=&answer {
-                let named:Vec<_>=path.iter().filter_map(|id|labels.get(id).cloned()).collect();
-                if named.len()==path.len(){text.push_str(&format!(" Đường suy luận: {}. Đây là quan hệ trong nguồn đã ghi, chưa phải xác minh độc lập.",named.join(" → ")));}
-            }
-            if !consulted.is_empty() {
-                text.push_str(&format!(" Đã xét các nguồn: {}.", consulted.join(", ")));
+            if suppress_repeated_details {
+                text.push_str(" Mạch bằng chứng không đổi so với lượt trước.");
+            } else {
+                if let OpenAnswer::Supported{path,..}|OpenAnswer::Opposed{path,..}=&answer {
+                    let named:Vec<_>=path.iter().filter_map(|id|labels.get(id).cloned()).collect();
+                    if named.len()==path.len(){text.push_str(&format!(" Đường suy luận: {}. Đây là quan hệ trong nguồn đã ghi, chưa phải xác minh độc lập.",named.join(" → ")));}
+                }
+                if !consulted.is_empty() {
+                    text.push_str(&format!(" Đã xét các nguồn: {}.", consulted.join(", ")));
+                }
             }
         }
         text
