@@ -14,7 +14,7 @@ fn correction_updates_dialogue_context_not_sources() {
     assert!(corrected.contains("duong tron"), "{corrected}");
 
     let sources = c.handle("Bạn dựa vào đâu?").expect("sources");
-    assert!(sources.contains("nguon b") || sources.contains("Nguồn b"), "{sources}");
+    assert!(sources.contains("b: mua gay ra duong tron"), "{sources}");
 }
 
 #[test]
