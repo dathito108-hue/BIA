@@ -242,6 +242,20 @@ mod tests {
     }
 
     #[test]
+    fn parses_repair_from_chu_khong_phai_form() {
+        assert_eq!(
+            parse(
+                "Tôi hỏi gió chứ không phải mưa.",
+                Some("mưa co gay ra duong tron khong")
+            ),
+            Some(GroundingMove::ReplaceSubject {
+                rejected: "mua".into(),
+                replacement: "gio".into()
+            })
+        );
+    }
+
+    #[test]
     fn asks_for_role_when_repair_is_not_grounded() {
         let move_ = parse(
             "Không phải X mà Y.",
