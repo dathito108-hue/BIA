@@ -78,6 +78,13 @@ impl ConversationContinuity {
             .any(|turn| turn.subject == subject && turn.object == object)
     }
 
+    pub fn role_flags(&self, entity: &str) -> (bool, bool) {
+        let entity = normalize(entity);
+        let as_subject = self.turns.iter().any(|turn| turn.subject == entity);
+        let as_object = self.turns.iter().any(|turn| turn.object == entity);
+        (as_subject, as_object)
+    }
+
     pub fn correct_last_entity(&mut self, replacement: &str, rejected: &str) -> Option<String> {
         let replacement = normalize(replacement).trim().to_string();
         let rejected = normalize(rejected).trim().to_string();
@@ -159,6 +166,8 @@ mod tests {
         c.remember("x co gay ra y khong", "x", "y");
         assert_eq!(c.relation_continuity("a", "b"), RelationContinuity::Return);
         assert!(c.relation_seen("a", "b"));
+        assert_eq!(c.role_flags("a"), (true, false));
+        assert_eq!(c.role_flags("b"), (false, true));
 
         for i in 0..20 {
             c.remember(&format!("q{i}"), &format!("s{i}"), &format!("o{i}"));
