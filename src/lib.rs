@@ -98,7 +98,7 @@ pub use discovery::{ContextDiscovery, DiscoveredSimilarity};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
 pub use duyen_weave::DuyenWeave;
 pub use discourse_generator::{DiscourseMove, DiscoursePlan};
-pub use conversation_continuity::{ConversationContinuity, DiscourseTurn};
+pub use conversation_continuity::{ConversationContinuity, DiscourseTurn, RelationContinuity};
 pub use compositional_dialogue::{CompositeDialoguePlan, DialogueGoal};
 pub use intent_fusion::{IntentFusionPlan, ResponseSection};
 pub use natural_surface::{NaturalSurfaceRealizer, SurfacePart, SurfaceSection};
