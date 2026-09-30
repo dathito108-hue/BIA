@@ -705,6 +705,7 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeLoad(
     match runtime().lock() {
         Ok(mut app) => {
             let continuity = app.continuity_export();
+            if app.tools.busy() {return 0}
             *app = OfflineMobileBia::new(BiaDca::from_snapshot(BiaDcaConfig::default(), snapshot));
             let _ = app.continuity_import(&continuity);
             1
@@ -799,11 +800,11 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeRevokeApproval(
     }
 }
 
-static GAME_AGENT: OnceLock<Mutex<crate::game_agent::GameAgent>> = OnceLock::new();
+
 #[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_GameNative_reset(_env: JNIEnv, _class: JClass) {
-    if let Ok(mut agent) = GAME_AGENT.get_or_init(Default::default).lock() {
-        agent.reset();
+    if let Ok(mut app) = runtime().lock() {
+        app.game.reset();
     }
 }
 #[no_mangle]
@@ -838,9 +839,9 @@ pub extern "system" fn Java_com_bia_mobile_GameNative_observe(
                 tolerance: p[7] as u8,
                 moba: p[8] > 0.5,
             };
-            if let Ok(mut agent) = GAME_AGENT.get_or_init(Default::default).lock() {
+            if let Ok(mut app) = runtime().lock() {
                 let data: Vec<u32> = data.into_iter().map(|x| x as u32).collect();
-                let d = agent.observe(
+                let d = app.game.observe(
                     &data,
                     width as usize,
                     height as usize,
@@ -871,7 +872,7 @@ pub extern "system" fn Java_com_bia_mobile_GameNative_observe(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_bia_mobile_TradingNative_analyze(
+pub extern "system" fn Java_com_bia_mobile_TradingNative_analyzeCore(
     mut env: JNIEnv, _class:JClass, candles:jni::objects::JDoubleArray,
     price:jni::sys::jdouble, event_ms:jlong, now_ms:jlong, connected:jboolean,
 )->jstring {
@@ -887,7 +888,7 @@ pub extern "system" fn Java_com_bia_mobile_TradingNative_analyze(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_bia_mobile_TradingNative_quality(
+pub extern "system" fn Java_com_bia_mobile_TradingNative_qualityCore(
     mut env: JNIEnv, _class:JClass, points:jni::objects::JDoubleArray,
     now_ms:jlong, cost:jni::sys::jdouble,
 )->jstring {
@@ -914,4 +915,18 @@ pub extern "system" fn Java_com_bia_mobile_ProductNative_compatibility(mut env: 
     let b=env.get_string(&after).map(|s|s.to_string_lossy().into_owned()).unwrap_or_default();
     let result=crate::product_studio::Spec::parse(&a).and_then(|a|crate::product_studio::Spec::parse(&b).and_then(|b|crate::product_studio::compatible(&a,&b)));
     java_string(&mut env,match result{Ok(s)=>format!("OK: {s}"),Err(s)=>format!("CHẶN: {s}")})
+}
+
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_CoreSkills_begin(mut env:JNIEnv,_class:JClass,skill:JString)->jlong{
+ let Ok(skill)=env.get_string(&skill) else{return 0};
+ runtime().lock().ok().and_then(|mut app|app.tools.begin(&skill.to_string_lossy())).unwrap_or(0) as jlong
+}
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_CoreSkills_finish(_env:JNIEnv,_class:JClass,id:jlong,success:jboolean)->jboolean{
+ runtime().lock().map(|mut app|u8::from(id>0 && app.tools.finish(id as u64,success!=0))).unwrap_or(0)
+}
+#[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_CoreSkills_report(mut env:JNIEnv,_class:JClass)->jstring{
+ let text=runtime().lock().map(|app|app.tools.report()).unwrap_or_else(|_|"Lõi không sẵn sàng".into());java_string(&mut env,text)
 }
