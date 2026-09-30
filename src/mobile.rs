@@ -81,7 +81,14 @@ impl OfflineMobileBia {
             timestamp,
         });
 
-        let execution_reply = if matches!(text.trim().to_lowercase().as_str(), "kiểm tra năng lực" | "kiem tra nang luc" | "bia skills") { Some(self.tools.report()) } else {self.execution_command(text, timestamp)};
+        let training_reply = if matches!(crate::semantic::normalize(text).trim(), "huan luyen tong quat" | "huan luyen bia") {
+            if self.tools.busy() || self.queue_len()>0 {Some("Hãy hoàn tất hoặc dừng tác vụ đang chạy trước khi huấn luyện.".into())} else {
+                let run=crate::general_training::train(&self.integrated);
+                let status=if run.qualified {self.integrated=run.candidate;"Đã lưu giáo trình vào trí nhớ tích hợp của BIA."} else {"Không thay đổi trí nhớ: giáo trình đã học hoặc chưa đạt điều kiện."};
+                Some(format!("{status}\nĐây là học ký hiệu trên giáo trình tổng hợp giới hạn; chưa chứng minh trí tuệ tổng quát.\n{}",run.report))
+            }
+        } else {None};
+        let execution_reply = training_reply.or_else(|| if matches!(text.trim().to_lowercase().as_str(), "kiểm tra năng lực" | "kiem tra nang luc" | "bia skills") { Some(self.tools.report()) } else {self.execution_command(text, timestamp)});
         if let Some(reply) = execution_reply.or_else(|| self.integrated.handle(text)) {
             let focus = self
                 .language

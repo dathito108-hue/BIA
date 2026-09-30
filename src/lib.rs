@@ -1627,3 +1627,5 @@ pub mod trading_quality;
 pub mod product_studio;
 
 pub mod core_tools;
+
+pub mod general_training;
