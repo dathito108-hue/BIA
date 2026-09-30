@@ -440,6 +440,36 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
         return t;
     }
 
+    private View capabilityCard(String icon, String title, String subtitle, int accent) {
+        LinearLayout c = column();
+        c.setPadding(dp(9), dp(9), dp(8), dp(10));
+        GradientDrawable bg = rounded(Color.rgb(20, 39, 34), dp(15));
+        bg.setStroke(dp(1), accent);
+        c.setBackground(bg);
+        c.addView(text(icon, 20, accent, Typeface.BOLD));
+        c.addView(text(title, 12, TEXT, Typeface.BOLD));
+        c.addView(text(subtitle, 9, MUTED, Typeface.NORMAL));
+        return c;
+    }
+
+    private View capabilityProgress() {
+        LinearLayout box = column();
+        box.setPadding(dp(8), dp(6), dp(8), dp(8));
+        box.setBackground(rounded(Color.rgb(17, 42, 36), dp(14)));
+        LinearLayout stages = row();
+        String[] v = {"V163\nTổng hợp", "V164\nĐộ sâu", "V165\nHội thoại mở", "V166\nMạch", "V167\nChính sách"};
+        for (String item : v) {
+            TextView t = text(item, 9, TEXT, Typeface.BOLD);
+            t.setGravity(Gravity.CENTER);
+            stages.addView(t, weightParams());
+        }
+        box.addView(stages);
+        TextView done = text("━━━━━━━━━━━━━━━━━━━━  100%  •  Đã triển khai", 10, JADE, Typeface.BOLD);
+        done.setPadding(dp(4), dp(5), 0, 0);
+        box.addView(done);
+        return box;
+    }
+
     private View buildFunctionsDashboard() {
         LinearLayout panel = dashboardCard();
         panel.addView(sectionTitle("TÁC VỤ & CÔNG CỤ"));
