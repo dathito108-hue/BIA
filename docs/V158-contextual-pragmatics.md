@@ -11,17 +11,19 @@ Ví dụ, sau khi đã hỏi về một quan hệ của `mưa`, người dùng c
 - `Còn bùn?`
 - `Còn gió thì sao?`
 
-BIA chỉ tự điền phần bị lược khi vai trò của đối tượng được xác nhận duy nhất từ lịch sử semantic turn hoặc các nguồn đã ghi.
+BIA chỉ tự điền phần bị lược khi vai trò của đối tượng được xác nhận duy nhất **và có liên hệ trực tiếp với đầu còn lại của quan hệ hiện tại** từ lịch sử semantic turn hoặc các nguồn đã ghi.
 
 ## Quy tắc vai trò
 
 BIA tổng hợp bằng chứng vai trò từ:
 
-- các subject/object trong tối đa 12 semantic turn gần nhất;
-- subject/object trong các nguồn Report/Observation hiện có.
+- các subject/object trong tối đa 12 semantic turn gần nhất có chung đầu quan hệ còn lại;
+- các quan hệ Report/Observation có chung subject hiện tại hoặc object hiện tại.
 
-Nếu đối tượng chỉ xuất hiện ở vai subject, nó có thể thay nguyên nhân/chủ thể hiện tại.
-Nếu chỉ xuất hiện ở vai object, nó có thể thay kết quả hiện tại.
+Nếu đối tượng xuất hiện ở vai subject và nối tới đúng object hiện tại, nó có thể thay nguyên nhân/chủ thể hiện tại.
+Nếu nó xuất hiện ở vai object và được nối từ đúng subject hiện tại, nó có thể thay kết quả hiện tại.
+
+Một vai trò ở nguồn không liên quan không đủ để suy lược. Ví dụ `nhiệt -> giãn nở` không cho phép BIA tự hiểu `Còn nhiệt?` là thay nguyên nhân trong một cuộc trao đổi đang xét `mưa -> đường trơn`.
 
 Nếu đối tượng xuất hiện ở cả hai vai, hoặc chưa có bằng chứng vai trò, BIA hỏi lại thay vì đoán.
 
