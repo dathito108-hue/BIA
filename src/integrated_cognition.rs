@@ -991,6 +991,7 @@ impl IntegratedCognition {
             self.continuity
                 .remember(&question, &query.subject.text, &query.object.text);
             self.dialogue_goal.bind_relation(&question);
+            self.grounding.clear_unresolved();
         }
         let mut labels=std::collections::HashMap::new();
         let mut world = WorldGraph::new(1024, 512);
