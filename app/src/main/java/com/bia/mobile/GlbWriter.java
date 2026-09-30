@@ -14,7 +14,8 @@ public final class GlbWriter {
     }
     static double[] quaternion(double rx,double ry,double rz){double x=Math.toRadians(rx)/2,y=Math.toRadians(ry)/2,z=Math.toRadians(rz)/2;double sx=Math.sin(x),cx=Math.cos(x),sy=Math.sin(y),cy=Math.cos(y),sz=Math.sin(z),cz=Math.cos(z);return new double[]{sx*cy*cz-cx*sy*sz,cx*sy*cz+sx*cy*sz,cx*cy*sz-sx*sy*cz,cx*cy*cz+sx*sy*sz};}
     static double linear(int c){double v=c/255.0;return v<=0.04045?v/12.92:Math.pow((v+0.055)/1.055,2.4);}
-    public static byte[] write(MotionProject p)throws Exception{return new GlbWriter().build(p);}
+    public static byte[] write(MotionProject p)throws Exception{return CoreSkills.call("motion.export",()->writeCore(p));}
+    public static byte[] writeCore(MotionProject p)throws Exception{return new GlbWriter().build(p);}
     byte[] build(MotionProject p)throws Exception{
         JSONArray nodes=new JSONArray(),meshes=new JSONArray(),materials=new JSONArray(),roots=new JSONArray(),channels=new JSONArray(),samplers=new JSONArray();
         for(int i=0;i<p.base.items.size();i++){

@@ -73,6 +73,10 @@ public final class SceneEngine {
     static int shade(int color,double intensity){return Color.rgb(Math.min(255,(int)(Color.red(color)*intensity)),Math.min(255,(int)(Color.green(color)*intensity)),Math.min(255,(int)(Color.blue(color)*intensity)));}
     public static Bitmap render(Scene scene,int size)throws InterruptedIOException{return render(scene,size,null);}
     public static Bitmap render(Scene scene,int size,Scene framing)throws InterruptedIOException{
+        long id=CoreSkills.begin("scene.render");if(id<=0)throw new IllegalStateException("Lõi từ chối dựng cảnh");
+        boolean ok=false;try{Bitmap b=renderCore(scene,size,framing);ok=true;return b;}finally{CoreSkills.finish(id,ok);}
+    }
+    private static Bitmap renderCore(Scene scene,int size,Scene framing)throws InterruptedIOException{
         if(size<64||size>2048)throw new IllegalArgumentException("Ảnh tối đa 2048px");ArrayList<Part> parts=new ArrayList<>();double[] lo={Double.POSITIVE_INFINITY,Double.POSITIVE_INFINITY,Double.POSITIVE_INFINITY},hi={-Double.MAX_VALUE,-Double.MAX_VALUE,-Double.MAX_VALUE};
         for(Item i:scene.items){Part p=new Part(i);parts.add(p);for(double[] v:p.mesh.vertices)for(int k=0;k<3;k++){lo[k]=Math.min(lo[k],v[k]);hi[k]=Math.max(hi[k],v[k]);}}
         ArrayList<Part> bounds=parts;if(framing!=null){bounds=new ArrayList<>();Arrays.fill(lo,Double.POSITIVE_INFINITY);Arrays.fill(hi,-Double.MAX_VALUE);for(Item i:framing.items){Part p=new Part(i);bounds.add(p);for(double[] v:p.mesh.vertices)for(int k=0;k<3;k++){lo[k]=Math.min(lo[k],v[k]);hi[k]=Math.max(hi[k],v[k]);}}}

@@ -24,7 +24,8 @@ final class DexFeed {
     boolean cleanupStarted;volatile boolean running;volatile Snapshot latest;volatile String status="Chưa kết nối";
     DexFeed(int n,String p){if(n<0 || n>=2 || !p.matches("0x[0-9a-fA-F]{40}"))throw new IllegalArgumentException("Chọn mạng và địa chỉ pool V2 hợp lệ");network=n;pool=p.toLowerCase(Locale.ROOT);}
     void start(){running=true;status="Đang đọc blockchain thật…";worker.scheduleWithFixedDelay(this::refresh,0,15,TimeUnit.SECONDS);}
-    Object rpc(String method,JSONArray params)throws Exception {
+    Object rpc(String method,JSONArray params)throws Exception {return CoreSkills.call("dex.read",()->rpcCore(method,params));}
+    Object rpcCore(String method,JSONArray params)throws Exception {
         if(!running)throw new IOException("stopped");
         if(!Arrays.asList("eth_chainId","eth_getBlockByNumber","eth_call","eth_gasPrice","eth_estimateGas").contains(method))throw new SecurityException();
         JSONObject body=new JSONObject().put("jsonrpc","2.0").put("id",1).put("method",method).put("params",params);

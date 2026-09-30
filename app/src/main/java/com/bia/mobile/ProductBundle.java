@@ -15,7 +15,8 @@ final class ProductBundle {
     static String hex(String text){return hex(text.getBytes(StandardCharsets.UTF_8));}
     static String unhex(String text){if(text.length()%2!=0 || !text.matches("[0-9a-f]*"))throw new IllegalArgumentException("Hex lỗi");byte[] b=new byte[text.length()/2];for(int i=0;i<b.length;i++)b[i]=(byte)Integer.parseInt(text.substring(2*i,2*i+2),16);return new String(b,StandardCharsets.UTF_8);}
     static String hash(String text)throws Exception{return hex(MessageDigest.getInstance("SHA-256").digest(text.getBytes(StandardCharsets.UTF_8)));}
-    static ProductBundle compile(String spec)throws Exception{
+    static ProductBundle compile(String spec)throws Exception{return CoreSkills.call("product.compile",()->compileCore(spec));}
+    static ProductBundle compileCore(String spec)throws Exception{
         String wire=ProductNative.compile(spec);if(wire==null || wire.length()>500000)throw new IllegalStateException("Bộ sinh không trả gói hợp lệ");if(wire.startsWith("ERROR\t"))throw new IllegalArgumentException(unhex(wire.substring(6)));
         String[] lines=wire.split("\n");if(!lines[0].equals("BIA_BUNDLE_1"))throw new IllegalStateException("Sai phiên bản gói");ProductBundle b=new ProductBundle();for(int i=1;i<lines.length;i++){String[] p=lines[i].split("\t",-1);if(p.length!=2 || !NAMES.contains(p[0]) || b.files.put(p[0],unhex(p[1]))!=null)throw new IllegalStateException("Tệp gói không hợp lệ");}b.validate();return b;
     }

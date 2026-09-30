@@ -39,7 +39,8 @@ final class SolanaOrder {
     }
     static long nonnegative(JSONObject o,String key)throws Exception{long n=o.getLong(key);if(n<0)throw new IllegalStateException("Phí âm");return n;}
     void fresh(){long age=SystemClock.elapsedRealtime()-receivedAt;if(age<0 || age>60000)throw new IllegalStateException("Báo giá quá 60 giây; cần lấy lại");}
-    static SolanaOrder fetch(SolanaRpc rpc,String apiKey,String owner,boolean sellSol,String quantity,int bps,long maxFee)throws Exception{
+    static SolanaOrder fetch(SolanaRpc rpc,String apiKey,String owner,boolean sellSol,String quantity,int bps,long maxFee)throws Exception{return CoreSkills.call("solana.quote",()->fetchCore(rpc,apiKey,owner,sellSol,quantity,bps,maxFee));}
+    static SolanaOrder fetchCore(SolanaRpc rpc,String apiKey,String owner,boolean sellSol,String quantity,int bps,long maxFee)throws Exception{
         BigInteger n=SolanaWire.units(quantity,sellSol?9:6);long began=SystemClock.elapsedRealtime();
         HttpUrl.Builder url=HttpUrl.get("https://api.jup.ag/swap/v2/order").newBuilder().addQueryParameter("inputMint",sellSol?SOL:USDC).addQueryParameter("outputMint",sellSol?USDC:SOL).addQueryParameter("amount",n.toString()).addQueryParameter("slippageBps",Integer.toString(bps)).addQueryParameter("excludeRouters","jupiterz,dflow,okx");
         if(!owner.isEmpty()){SolanaWire.address(owner);url.addQueryParameter("taker",owner);}

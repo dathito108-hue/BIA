@@ -9,7 +9,8 @@ final class DexTransaction {
     static String calldata(BigInteger amount,BigInteger min,String tokenIn,String tokenOut,String recipient,long deadline){
         return "0x38ed1739"+word(amount)+word(min)+word(BigInteger.valueOf(160))+DexFeed.arg(recipient)+word(BigInteger.valueOf(deadline))+word(BigInteger.valueOf(2))+DexFeed.arg(tokenIn)+DexFeed.arg(tokenOut);
     }
-    static String prepare(DexFeed f,String owner,String amount,boolean reverse,int slip)throws Exception {
+    static String prepare(DexFeed f,String owner,String amount,boolean reverse,int slip)throws Exception {return CoreSkills.call("dex.prepare",()->prepareCore(f,owner,amount,reverse,slip));}
+    static String prepareCore(DexFeed f,String owner,String amount,boolean reverse,int slip)throws Exception {
         if(!owner.matches("0x[0-9a-fA-F]{40}") || new BigInteger(owner.substring(2),16).signum()==0)throw new IllegalArgumentException("Cần địa chỉ ví công khai hợp lệ; không nhập private key");
         String report=f.report(amount,reverse,slip);
         if(!f.running || f.latest==null || report.contains("CHẶN") || report.contains("Không có báo giá"))throw new IllegalStateException("Báo giá chưa vượt điều kiện kiểm tra");

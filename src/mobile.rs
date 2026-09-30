@@ -38,6 +38,8 @@ pub struct OfflineMobileBia {
     pub intelligence: OpenIntelligence,
     pub retriever: SemanticRetriever,
     pub vector_retriever: VectorSemanticRetriever,
+    pub tools: crate::core_tools::CoreTools,
+    pub game: crate::game_agent::GameAgent,
     queue: ActionQueue,
     pub integrated: crate::integrated_cognition::IntegratedCognition,
     pub execution: crate::skill_execution::SkillExecution,
@@ -58,6 +60,8 @@ impl OfflineMobileBia {
             intelligence: OpenIntelligence::default(),
             retriever: SemanticRetriever,
             vector_retriever: VectorSemanticRetriever::default(),
+            tools: crate::core_tools::CoreTools::default(),
+            game: crate::game_agent::GameAgent::default(),
             queue: ActionQueue::new(12),
             integrated: crate::integrated_cognition::IntegratedCognition::default(),
             execution: crate::skill_execution::SkillExecution::default(),
@@ -77,7 +81,7 @@ impl OfflineMobileBia {
             timestamp,
         });
 
-        let execution_reply = self.execution_command(text, timestamp);
+        let execution_reply = if matches!(text.trim().to_lowercase().as_str(), "kiểm tra năng lực" | "kiem tra nang luc" | "bia skills") { Some(self.tools.report()) } else {self.execution_command(text, timestamp)};
         if let Some(reply) = execution_reply.or_else(|| self.integrated.handle(text)) {
             let focus = self
                 .language
@@ -572,10 +576,13 @@ impl OfflineMobileBia {
             knowledge: self.knowledge.records().cloned().collect(),
         });
         let cognition = self.integrated.export();
-        format!("{base}\n{cognition}\n{}", self.execution.export())
+        format!("{base}\n{cognition}\n{}\n{}", self.execution.export(), self.tools.export())
     }
 
     pub fn continuity_import(&mut self, text: &str) -> bool {
+        if self.tools.busy() {return false}
+        let Some(mut restored_tools)=crate::core_tools::CoreTools::restore(text) else {return false};
+        restored_tools.retain_counter(&self.tools);
         let Some(state) = decode_continuity(text) else {
             return false;
         };
@@ -589,6 +596,8 @@ impl OfflineMobileBia {
             return false;
         };
         self.execution_authority.revoke();
+        self.tools = restored_tools;
+        self.game.reset();
         self.integrated = restored_cognition;
         self.execution = restored_execution;
         if let Some(goal) = state.active_goal {
