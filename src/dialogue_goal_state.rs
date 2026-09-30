@@ -89,7 +89,7 @@ pub fn parse_goal(input: &str) -> Option<ImplicitDialogueGoal> {
         "co gi phan doi khong",
         "tim diem phan doi",
         "xem phan chung",
-    ].iter().any(|x|bare==*x) {
+    ].contains(&bare) {
         return Some(ImplicitDialogueGoal::Challenge);
     }
 
