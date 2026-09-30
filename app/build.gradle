@@ -14,8 +14,8 @@ android {
         minSdk 26
         targetSdk 35
         testInstrumentationRunner "android.test.InstrumentationTestRunner"
-        versionCode 154
-        versionName "1.54.0"
+        versionCode 155
+        versionName "1.55.0"
     }
 
     buildTypes {
