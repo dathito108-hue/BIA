@@ -114,7 +114,7 @@ mod tests {
         };
         let p = DialogueSynthesisPlan::build(
             Some(ImplicitDialogueGoal::Verify),
-            RelationContinuity::Continue,
+            RelationContinuity::SameSubject,
             &weave,
             0.55,
             2,
