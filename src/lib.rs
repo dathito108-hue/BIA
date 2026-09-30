@@ -102,6 +102,7 @@ pub use conversation_continuity::{ConversationContinuity, DiscourseTurn, Relatio
 pub use compositional_dialogue::{CompositeDialoguePlan, DialogueGoal};
 pub use contextual_pragmatics::PragmaticMove;
 pub use conversational_implicature::ConversationAct;
+pub use dynamic_dialogue_intent::{DynamicDialoguePlan, DynamicIntent};
 pub use intent_fusion::{IntentFusionPlan, ResponseSection};
 pub use natural_surface::{NaturalSurfaceRealizer, SurfacePart, SurfaceSection};
 pub use expression_style::ExpressionStyle;
@@ -1645,6 +1646,7 @@ pub mod conversation_continuity;
 pub mod compositional_dialogue;
 pub mod contextual_pragmatics;
 pub mod conversational_implicature;
+pub mod dynamic_dialogue_intent;
 pub mod intent_fusion;
 pub mod natural_surface;
 pub mod duyen_weave;
