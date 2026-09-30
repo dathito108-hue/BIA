@@ -1037,6 +1037,21 @@ impl IntegratedCognition {
                 }
             }
         }
+        let synthesis = crate::dialogue_synthesis::DialogueSynthesisPlan::build(
+            self.dialogue_goal.current(),
+            relation_continuity,
+            &weave,
+            uncertainty,
+            self.last_evidence.len(),
+        );
+        if style != crate::expression_style::ExpressionStyle::Brief {
+            text = synthesis.enrich(
+                text,
+                &query.subject.text,
+                &query.object.text,
+                &self.last_evidence,
+            );
+        }
         if remember_turn {
             self.last_source_snapshot=self.relation_source_snapshot(&question);
         }
