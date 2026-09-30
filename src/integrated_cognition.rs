@@ -158,6 +158,51 @@ impl IntegratedCognition {
                 ImplicitDialogueGoal::Explore | ImplicitDialogueGoal::Verify => {}
             }
         }
+        if let Some(thread_move) = crate::dialogue_thread::parse(input) {
+            use crate::dialogue_goal_state::ImplicitDialogueGoal;
+            use crate::dialogue_thread::DialogueThreadMove;
+            match thread_move {
+                DialogueThreadMove::ExplainCause
+                | DialogueThreadMove::GroundEvidence
+                | DialogueThreadMove::Continue => {
+                    let Some(q) = self.last_question.clone() else {
+                        return None;
+                    };
+                    self.dialogue_goal.advance(ImplicitDialogueGoal::Explore);
+                    let deep = self.answer_styled(
+                        &q,
+                        crate::expression_style::ExpressionStyle::Deep,
+                    );
+                    let prefix = match thread_move {
+                        DialogueThreadMove::ExplainCause => "Mở rộng theo nhánh nhân/quả từ câu vừa rồi",
+                        DialogueThreadMove::GroundEvidence => "Kiểm tra lại theo bằng chứng của câu vừa rồi",
+                        DialogueThreadMove::Continue => "Tiếp tục đúng mạch quan hệ vừa rồi",
+                        _ => unreachable!(),
+                    };
+                    return Some(format!("{prefix}: {deep}"));
+                }
+                DialogueThreadMove::Return => {
+                    let Some(q) = self.continuity.previous().map(|turn| turn.question.clone())
+                        .or_else(|| self.last_question.clone())
+                    else {
+                        return None;
+                    };
+                    return Some(self.answer_styled(
+                        &q,
+                        crate::expression_style::ExpressionStyle::Standard,
+                    ));
+                }
+                DialogueThreadMove::Clarify => {
+                    let Some(q) = self.last_question.clone() else {
+                        return None;
+                    };
+                    return Some(format!(
+                        "Tôi đang giữ mạch “{q}”. Bạn muốn làm rõ nguyên nhân, kết quả hay bằng chứng?"
+                    ));
+                }
+                DialogueThreadMove::Compare | DialogueThreadMove::Counterfactual => {}
+            }
+        }
         if let Some(plan) = crate::dynamic_dialogue_intent::DynamicDialoguePlan::parse(input) {
             return Some(self.execute_dynamic_dialogue_plan(plan));
         }
