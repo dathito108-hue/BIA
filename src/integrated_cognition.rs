@@ -134,6 +134,49 @@ impl IntegratedCognition {
     fn conversation(&mut self,input:&str)->Option<String>{
         use crate::conversation_language::{understand,Frame};
         let normalized = normalize(input).trim().trim_end_matches(['?','!','.']).to_string();
+        if let Some(plan)=crate::intent_fusion::IntentFusionPlan::parse(input) {
+            use crate::intent_fusion::ResponseSection;
+            let Some(current)=self.last_question.clone() else {
+                return Some("Chưa có câu hỏi hiện tại để hợp nhất kế hoạch trả lời.".into());
+            };
+            let previous=self.continuity.previous().map(|turn|turn.question.clone());
+            let current_scene=VietnameseSemanticParser.parse(&current);
+            let focus_valid=plan.focus.as_ref().is_none_or(|focus|{
+                let Some(query)=current_scene.query.as_ref() else{return false};
+                focus==&query.subject.text || focus==&query.object.text
+            });
+            if !focus_valid {
+                return Some("Trọng tâm được yêu cầu chưa khớp rõ với hai đối tượng của câu hỏi hiện tại; hãy nêu lại đối tượng cần tập trung.".into());
+            }
+            let mut parts=Vec::new();
+            if let Some(focus)=&plan.focus {
+                parts.push(format!("Trọng tâm: “{focus}”."));
+            }
+            if plan.contains(ResponseSection::Explain) {
+                parts.push(format!("Giải thích: {}",self.answer_styled(&current,crate::expression_style::ExpressionStyle::Deep)));
+            }
+            if plan.contains(ResponseSection::ComparePrevious) {
+                let Some(previous)=previous.clone() else {
+                    return Some("Chưa có trường hợp trước đủ rõ để so sánh.".into());
+                };
+                let prior=self.answer_styled(&previous,crate::expression_style::ExpressionStyle::Standard);
+                let now=self.answer_styled(&current,crate::expression_style::ExpressionStyle::Standard);
+                parts.push(format!("Đối chiếu: trường hợp trước — {prior} Trường hợp hiện tại — {now}"));
+            }
+            if plan.contains(ResponseSection::Summary) {
+                parts.push(format!("Tóm tắt: {}",self.answer_styled(&current,crate::expression_style::ExpressionStyle::Brief)));
+            }
+            if plan.contains(ResponseSection::ConclusionFromPrevious) {
+                let Some(previous)=previous else {
+                    return Some("Chưa có trường hợp trước đủ rõ để dùng làm kết luận tham chiếu.".into());
+                };
+                parts.push(format!("Kết luận theo trường hợp trước: {}",self.answer_styled(&previous,crate::expression_style::ExpressionStyle::Brief)));
+            }
+            if parts.is_empty() {
+                return Some("Kế hoạch trả lời sau khi loại các phần yêu cầu đã rỗng; hãy giữ lại ít nhất một mục.".into());
+            }
+            return Some(parts.join("\n"));
+        }
         if let Some(plan)=crate::compositional_dialogue::CompositeDialoguePlan::parse(input) {
             use crate::compositional_dialogue::DialogueGoal;
             let Some(current)=self.last_question.clone() else {
