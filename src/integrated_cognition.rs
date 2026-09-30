@@ -134,11 +134,23 @@ impl IntegratedCognition {
     fn conversation(&mut self,input:&str)->Option<String>{
         use crate::conversation_language::{understand,Frame};
         let normalized = normalize(input).trim().trim_end_matches(['?','!','.']).to_string();
-        if matches!(normalized.as_str(), "y truoc"|"y vua roi"|"truong hop truoc"|"truong hop vua roi") {
+        if let Some(body)=normalized.strip_prefix("y toi la ") {
+            if let Some((replacement,rejected))=body.split_once(" chu khong phai ") {
+                let Some(q)=self.continuity.correct_last_entity(replacement,rejected) else {
+                    return Some("Tôi chưa tìm thấy đối tượng cần sửa trong lượt gần nhất; hãy nêu lại câu hỏi đầy đủ.".into());
+                };
+                self.last_question=Some(q.clone());
+                return Some(self.answer(&q));
+            }
+        }
+        if matches!(normalized.as_str(), "y truoc"|"y vua roi"|"truong hop truoc"|"truong hop vua roi"|"truong hop kia") {
             let Some(q)=self.continuity.resolve_reference(&normalized) else {
                 return Some("Chưa có lượt hội thoại trước đủ rõ để tham chiếu.".into());
             };
             return Some(self.answer(&q));
+        }
+        if normalized.starts_with("bo duyen thu ") || normalized.starts_with("neu bo duyen thu ") {
+            return Some("Chưa thể xác định duyên theo số thứ tự một cách an toàn. Hãy nêu tên duyên cần bỏ, ví dụ: nếu bỏ độ ẩm thì đường trơn.".into());
         }
         if normalized.starts_with("cai thu nhat") || normalized.starts_with("doi tuong thu nhat")
             || normalized.starts_with("cai thu hai") || normalized.starts_with("doi tuong thu hai") {
