@@ -1,7 +1,7 @@
 package com.bia.mobile;
 import android.test.InstrumentationTestCase;
 public final class NaturalDialogueV147Test extends InstrumentationTestCase {
- protected void setUp(){MainActivity.nativeResetDialogueForTests();}
+ protected void setUp() throws Exception {super.setUp();MainActivity.nativeResetDialogueForTests();}
  String say(String s){return MainActivity.nativeChat(s,300000,0.9f,0.1f,0.1f,2048);}
  public void testNaturalCausalDialoguePreservesMeaning(){
   say("Ghi nhớ rằng mưa gây ra đường ướt.");
