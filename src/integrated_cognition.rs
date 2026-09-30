@@ -1141,6 +1141,26 @@ impl IntegratedCognition {
             uncertainty,
             self.last_evidence.len(),
         );
+        let mut composed_moves = Vec::new();
+        for action in composition.actions() {
+            let move_kind = match action {
+                DialogueAction::Answer => crate::dialogue_synthesis::DialogueMove::Answer,
+                DialogueAction::Explain | DialogueAction::Ground => crate::dialogue_synthesis::DialogueMove::Ground,
+                DialogueAction::Contrast => crate::dialogue_synthesis::DialogueMove::Contrast,
+                DialogueAction::Qualify => crate::dialogue_synthesis::DialogueMove::Qualify,
+                DialogueAction::Continue | DialogueAction::Return => crate::dialogue_synthesis::DialogueMove::Continue,
+                DialogueAction::Clarify => crate::dialogue_synthesis::DialogueMove::Clarify,
+                DialogueAction::Invite => crate::dialogue_synthesis::DialogueMove::Invite,
+                DialogueAction::Conclude => crate::dialogue_synthesis::DialogueMove::Close,
+            };
+            if !composed_moves.contains(&move_kind) {
+                composed_moves.push(move_kind);
+            }
+        }
+        if !composed_moves.is_empty() {
+            synthesis.moves = composed_moves;
+        }
+        synthesis.moves.truncate(6);
         let open_plan = crate::open_dialogue::OpenDialoguePlan::from_synthesis(&synthesis);
         if style != crate::expression_style::ExpressionStyle::Brief {
             text = synthesis.render(
