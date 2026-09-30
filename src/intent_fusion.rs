@@ -49,7 +49,9 @@ impl IntentFusionPlan {
         sections.dedup();
         excluded.dedup();
 
-        let has_fusion = sections.len() >= 2 || (focus.is_some() && !sections.is_empty()) || !excluded.is_empty();
+        let has_fusion = (focus.is_some() && !sections.is_empty())
+            || !excluded.is_empty()
+            || sections.contains(&ResponseSection::ConclusionFromPrevious);
         has_fusion.then_some(Self {
             sections,
             focus,
