@@ -1082,13 +1082,42 @@ impl IntegratedCognition {
                 }
             }
         }
-        let synthesis = crate::dialogue_synthesis::DialogueSynthesisPlan::build(
+        let policy = crate::contextual_dialogue_policy::ContextualDialoguePolicy::select(
+            self.dialogue_goal.current(),
+            relation_continuity,
+            &weave,
+            uncertainty,
+            self.last_evidence.len(),
+            self.repair_pending,
+        );
+        let mut synthesis = crate::dialogue_synthesis::DialogueSynthesisPlan::build(
             self.dialogue_goal.current(),
             relation_continuity,
             &weave,
             uncertainty,
             self.last_evidence.len(),
         );
+        use crate::contextual_dialogue_policy::DialogueAction;
+        let selected = &policy.actions;
+        synthesis.moves.retain(|m| {
+            match m {
+                crate::dialogue_synthesis::DialogueMove::Answer => true,
+                crate::dialogue_synthesis::DialogueMove::Ground => policy.has(DialogueAction::Ground),
+                crate::dialogue_synthesis::DialogueMove::Contrast => policy.has(DialogueAction::Contrast),
+                crate::dialogue_synthesis::DialogueMove::Qualify => policy.has(DialogueAction::Qualify),
+                crate::dialogue_synthesis::DialogueMove::Continue => policy.has(DialogueAction::Continue),
+                crate::dialogue_synthesis::DialogueMove::Clarify => policy.has(DialogueAction::Clarify),
+                crate::dialogue_synthesis::DialogueMove::Invite => policy.has(DialogueAction::Invite),
+                crate::dialogue_synthesis::DialogueMove::Close => policy.has(DialogueAction::Conclude),
+            }
+        });
+        if policy.has(DialogueAction::Explain) && !synthesis.moves.contains(&crate::dialogue_synthesis::DialogueMove::Ground) {
+            synthesis.moves.push(crate::dialogue_synthesis::DialogueMove::Ground);
+        }
+        if selected.is_empty() {
+            synthesis.moves.push(crate::dialogue_synthesis::DialogueMove::Answer);
+        }
+        synthesis.moves.truncate(6);
         let open_plan = crate::open_dialogue::OpenDialoguePlan::from_synthesis(&synthesis);
         if style != crate::expression_style::ExpressionStyle::Brief {
             text = synthesis.render(
