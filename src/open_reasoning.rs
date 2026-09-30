@@ -8,17 +8,14 @@ pub enum OpenAnswer {
     Supported {
         confidence: f32,
         path: Vec<u64>,
-        weave: DuyenWeave,
     },
     Opposed {
         confidence: f32,
         path: Vec<u64>,
-        weave: DuyenWeave,
     },
     Contradicted {
         support: f32,
         opposition: f32,
-        weave: DuyenWeave,
     },
     Counterfactual {
         support_delta: f32,
@@ -55,13 +52,29 @@ impl SemanticReasoner {
     }
 
     pub fn answer_scene(&self, world: &WorldGraph, scene: &SemanticScene) -> OpenAnswer {
+        self.answer_scene_with_weave(world, scene).0
+    }
+
+    pub fn answer_scene_with_weave(
+        &self,
+        world: &WorldGraph,
+        scene: &SemanticScene,
+    ) -> (OpenAnswer, DuyenWeave) {
         let Some(query) = &scene.query else {
-            return OpenAnswer::Unknown;
+            return (OpenAnswer::Unknown, DuyenWeave::default());
         };
-        self.answer_query(world, query)
+        self.answer_query_with_weave(world, query)
     }
 
     pub fn answer_query(&self, world: &WorldGraph, query: &SemanticQuery) -> OpenAnswer {
+        self.answer_query_with_weave(world, query).0
+    }
+
+    pub fn answer_query_with_weave(
+        &self,
+        world: &WorldGraph,
+        query: &SemanticQuery,
+    ) -> (OpenAnswer, DuyenWeave) {
         match query.kind {
             QueryKind::Causal => {
                 let verdict = self
@@ -73,7 +86,7 @@ impl SemanticReasoner {
                 let verdict =
                     self.causal
                         .counterfactual_without(world, query.object.id, query.subject.id);
-                answer_counterfactual(verdict)
+                (answer_counterfactual(verdict), DuyenWeave::default())
             }
         }
     }
@@ -89,36 +102,37 @@ impl SemanticReasoner {
     }
 }
 
-fn answer_causal(verdict: ReasoningVerdict, source: u64) -> OpenAnswer {
+fn answer_causal(verdict: ReasoningVerdict, source: u64) -> (OpenAnswer, DuyenWeave) {
     let weave = DuyenWeave::from_paths(&verdict.paths, verdict.target);
     if verdict.contradicted {
-        return OpenAnswer::Contradicted {
-            support: verdict.support,
-            opposition: verdict.opposition,
+        return (
+            OpenAnswer::Contradicted {
+                support: verdict.support,
+                opposition: verdict.opposition,
+            },
             weave,
-        };
+        );
     }
 
     let Some(path) = verdict.best_path else {
-        return OpenAnswer::Unknown;
+        return (OpenAnswer::Unknown, weave);
     };
     if !path.nodes.contains(&source) {
-        return OpenAnswer::Unknown;
+        return (OpenAnswer::Unknown, weave);
     }
 
-    if path.inhibited || verdict.opposition > verdict.support {
+    let answer = if path.inhibited || verdict.opposition > verdict.support {
         OpenAnswer::Opposed {
             confidence: verdict.confidence,
             path: path.nodes,
-            weave,
         }
     } else {
         OpenAnswer::Supported {
             confidence: verdict.confidence,
             path: path.nodes,
-            weave,
         }
-    }
+    };
+    (answer, weave)
 }
 
 fn answer_counterfactual(verdict: CounterfactualVerdict) -> OpenAnswer {
