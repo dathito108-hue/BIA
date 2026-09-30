@@ -156,6 +156,46 @@ fn parse_causal_query(s: &str) -> Option<SemanticQuery> {
         }
     }
 
+    // Natural copular form: “A có phải là nguyên nhân của B không?”
+    if let Some((a, right)) = split_once_nonempty(question, " co phai la nguyen nhan cua ") {
+        let b = right.strip_suffix(" khong").unwrap_or(right).trim();
+        if !a.is_empty() && !b.is_empty() {
+            return Some(SemanticQuery {
+                kind: QueryKind::Causal,
+                subject: entity(a),
+                object: entity(b),
+            });
+        }
+    }
+
+    // Natural inverse forms keep semantic roles explicit instead of guessing:
+    // “B có phải do A gây ra không?” / “B có phải là do A không?”
+    if let Some((effect, right)) = split_once_nonempty(question, " co phai do ") {
+        let right = right.strip_suffix(" khong").unwrap_or(right).trim();
+        for suffix in [" gay ra", " dan den", " dan toi", " lam cho", " khien"] {
+            if let Some(cause) = right.strip_suffix(suffix) {
+                let cause = cause.trim();
+                if !cause.is_empty() && !effect.is_empty() {
+                    return Some(SemanticQuery {
+                        kind: QueryKind::Causal,
+                        subject: entity(cause),
+                        object: entity(effect),
+                    });
+                }
+            }
+        }
+    }
+    if let Some((effect, right)) = split_once_nonempty(question, " co phai la do ") {
+        let cause = right.strip_suffix(" khong").unwrap_or(right).trim();
+        if !cause.is_empty() && !effect.is_empty() {
+            return Some(SemanticQuery {
+                kind: QueryKind::Causal,
+                subject: entity(cause),
+                object: entity(effect),
+            });
+        }
+    }
+
     if let Some(rest) = question.strip_prefix("tai sao ") {
         return Some(SemanticQuery {
             kind: QueryKind::Causal,

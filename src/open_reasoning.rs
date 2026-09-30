@@ -1,3 +1,4 @@
+use crate::duyen_weave::DuyenWeave;
 use crate::reasoning::{CausalReasoner, CounterfactualVerdict, ReasoningVerdict};
 use crate::semantic::{QueryKind, SemanticQuery, SemanticScene, VietnameseSemanticParser};
 use crate::world::WorldGraph;
@@ -51,25 +52,41 @@ impl SemanticReasoner {
     }
 
     pub fn answer_scene(&self, world: &WorldGraph, scene: &SemanticScene) -> OpenAnswer {
+        self.answer_scene_with_weave(world, scene).0
+    }
+
+    pub fn answer_scene_with_weave(
+        &self,
+        world: &WorldGraph,
+        scene: &SemanticScene,
+    ) -> (OpenAnswer, DuyenWeave) {
         let Some(query) = &scene.query else {
-            return OpenAnswer::Unknown;
+            return (OpenAnswer::Unknown, DuyenWeave::default());
         };
-        self.answer_query(world, query)
+        self.answer_query_with_weave(world, query)
     }
 
     pub fn answer_query(&self, world: &WorldGraph, query: &SemanticQuery) -> OpenAnswer {
+        self.answer_query_with_weave(world, query).0
+    }
+
+    pub fn answer_query_with_weave(
+        &self,
+        world: &WorldGraph,
+        query: &SemanticQuery,
+    ) -> (OpenAnswer, DuyenWeave) {
         match query.kind {
             QueryKind::Causal => {
-                let verdict = self
+                let (verdict, paths) = self
                     .causal
-                    .infer_between(world, query.subject.id, query.object.id);
-                answer_causal(verdict, query.subject.id)
+                    .infer_between_with_paths(world, query.subject.id, query.object.id);
+                answer_causal(verdict, paths, query.subject.id)
             }
             QueryKind::CounterfactualWithout => {
                 let verdict =
                     self.causal
                         .counterfactual_without(world, query.object.id, query.subject.id);
-                answer_counterfactual(verdict)
+                (answer_counterfactual(verdict), DuyenWeave::default())
             }
         }
     }
@@ -85,22 +102,30 @@ impl SemanticReasoner {
     }
 }
 
-fn answer_causal(verdict: ReasoningVerdict, source: u64) -> OpenAnswer {
+fn answer_causal(
+    verdict: ReasoningVerdict,
+    paths: Vec<crate::reasoning::CausalPath>,
+    source: u64,
+) -> (OpenAnswer, DuyenWeave) {
+    let weave = DuyenWeave::from_paths(&paths, verdict.target);
     if verdict.contradicted {
-        return OpenAnswer::Contradicted {
-            support: verdict.support,
-            opposition: verdict.opposition,
-        };
+        return (
+            OpenAnswer::Contradicted {
+                support: verdict.support,
+                opposition: verdict.opposition,
+            },
+            weave,
+        );
     }
 
     let Some(path) = verdict.best_path else {
-        return OpenAnswer::Unknown;
+        return (OpenAnswer::Unknown, weave);
     };
     if !path.nodes.contains(&source) {
-        return OpenAnswer::Unknown;
+        return (OpenAnswer::Unknown, weave);
     }
 
-    if path.inhibited || verdict.opposition > verdict.support {
+    let answer = if path.inhibited || verdict.opposition > verdict.support {
         OpenAnswer::Opposed {
             confidence: verdict.confidence,
             path: path.nodes,
@@ -110,7 +135,8 @@ fn answer_causal(verdict: ReasoningVerdict, source: u64) -> OpenAnswer {
             confidence: verdict.confidence,
             path: path.nodes,
         }
-    }
+    };
+    (answer, weave)
 }
 
 fn answer_counterfactual(verdict: CounterfactualVerdict) -> OpenAnswer {
