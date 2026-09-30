@@ -57,7 +57,6 @@ pub fn parse(input: &str, current_question: Option<&str>) -> Option<GroundingMov
         "y minh la ",
         "toi muon noi la ",
         "toi dang noi ve ",
-        "toi hoi ",
     ] {
         if let Some(rest) = bare.strip_prefix(prefix) {
             if let Some(question) = relation_question(rest) {
@@ -126,7 +125,7 @@ fn relation_question(text: &str) -> Option<String> {
 }
 
 fn split_correction(rest: &str) -> Option<(String, String)> {
-    for marker in [" ma ", " ma la ", ", ma ", ", la "] {
+    for marker in [", ma la ", ", ma ", ", la ", " ma la ", " ma "] {
         if let Some((left, right)) = rest.split_once(marker) {
             let rejected = clean_entity(left)?;
             let replacement = clean_entity(right)?;
@@ -148,10 +147,10 @@ fn split_chu_y(rest: &str) -> Option<(String, String)> {
 }
 
 fn clean_entity(text: &str) -> Option<String> {
-    let mut value = text.trim();
+    let mut value = text.trim().trim_matches([',', ' ']);
     for prefix in ["nguyen nhan ", "ket qua ", "doi tuong "] {
         if let Some(rest) = value.strip_prefix(prefix) {
-            value = rest.trim();
+            value = rest.trim().trim_matches([',', ' ']);
             break;
         }
     }
