@@ -155,6 +155,9 @@ public class MainActivity extends Activity implements TextToSpeech.OnInitListene
             refreshStatus();
         });
         root.addView(stopExecution);
+        Button products = compactButton("Xưởng sản phẩm: tạo mã và gói bàn giao");
+        products.setOnClickListener(v -> startActivity(new Intent(this, ProductActivity.class)));
+        root.addView(products);
         Button game = compactButton("Game: quan sát và đa chạm");
         game.setOnClickListener(v -> startActivity(new Intent(this, GameSetupActivity.class)));
         root.addView(game);

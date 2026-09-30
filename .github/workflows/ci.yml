@@ -13,6 +13,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - run: node scripts/product-runtime-test.cjs
       - run: cargo fmt
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --release

@@ -1,0 +1,17 @@
+'use strict';
+const assert=require('node:assert/strict');const c=require('../src/product_assets/core.js');
+assert.equal(c.selftest(),4);
+const p={id:'test-product',kind:'quote',currency:'USD'};
+const row={id:'row-1',name:'Service',note:'',qty:3,price:c.minor('0.10','USD')};
+assert.equal(c.total(c.validate([row],p.kind,p.currency)),'30');
+assert.deepEqual(c.restore(c.backup([row],p),p),[row]);
+assert.throws(()=>c.restore(c.backup([row],p),{...p,id:'other'}));
+assert.throws(()=>c.validate([row,{...row}],p.kind,p.currency));
+assert.throws(()=>c.minor('0.1','VND'));assert.throws(()=>c.minor('-1','USD'));assert.throws(()=>c.integer('1.5'));
+assert.throws(()=>c.validate(Array.from({length:501},()=>row),'quote','USD'));
+const stock={id:'stock-1',name:'Gỗ',sku:'ABC',qty:0,threshold:2,note:''};
+assert.equal(c.validate([stock],'stock','VND')[0].qty,0);assert.throws(()=>c.validate([stock,{...stock,id:'stock-2',sku:'abc'}],'stock','VND'));
+assert.throws(()=>c.row({id:'task-1',name:'Task',note:'',due:'2026-02-30',priority:2,status:'todo'},'tasks','VND'));
+assert.equal(c.row({id:'task-1',name:'Task',note:'',due:'2028-02-29',priority:2,status:'todo'},'tasks','VND').due,'2028-02-29');
+for(const name of ['=HYPERLINK("x")','+1','-1','@SUM(A1)','  =1+1'])assert.match(c.csv([{...row,name}],'quote','USD'),/'/);
+console.log('Product runtime: precision, limits, backup identity, duplicate stock, dates and CSV checks PASS');

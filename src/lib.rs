@@ -1623,3 +1623,5 @@ pub mod game_agent;
 pub mod trading_live;
 
 pub mod trading_quality;
+
+pub mod product_studio;

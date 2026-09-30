@@ -35,8 +35,9 @@ adb pull /sdcard/Android/data/com.bia.mobile/files/game-fps-proof.png game-evide
 adb pull /sdcard/Android/data/com.bia.mobile/files/dex-evidence.txt game-evidence/dex-evidence.txt || true
 adb pull /sdcard/Android/data/com.bia.mobile/files/market-evidence.txt game-evidence/market-evidence.txt || true
 adb pull /sdcard/Android/data/com.bia.mobile/files/solana-evidence.txt game-evidence/solana-evidence.txt || true
+adb pull /sdcard/Android/data/com.bia.mobile/files/product-demo.zip game-evidence/product-demo.zip
 python3 - <<'PY'
 from pathlib import Path
 s=Path('game-evidence/instrumentation.txt').read_text()
-assert 'OK (13 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, s
+assert 'OK (17 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, s
 PY
