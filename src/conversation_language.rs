@@ -1,7 +1,7 @@
 //! Bounded Vietnamese dialogue grammar. Produces meaning frames, never device actions.
 use crate::semantic::{normalize,VietnameseSemanticParser};
 #[derive(Debug,PartialEq)]
-pub enum Frame { Question(String), Remember(String), Explain, Sources, Brief, Reply(&'static str), Clarify }
+pub enum Frame { Alternative {subject:bool, entity:String}, Question(String), Remember(String), Explain, Sources, Brief, Reply(&'static str), Clarify }
 pub fn understand(input:&str)->Option<Frame>{
  if input.chars().count()>1024{return Some(Frame::Reply("Câu quá dài; hãy chia thành từng ý dưới 1.024 ký tự."))}
  let normalized=normalize(input);let mut s=normalized.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -16,6 +16,12 @@ pub fn understand(input:&str)->Option<Frame>{
   "noi ngan gon"|"tom tat lai"|"ngan gon hon"=>return Some(Frame::Brief),
   _=>{}
  }
+ for (prefix,subject) in [("con nguyen nhan ",true),("con ket qua ",false)] {
+  if let Some(rest)=bare.strip_prefix(prefix){if let Some(entity)=rest.strip_suffix(" thi sao"){
+   if !entity.is_empty()&&entity.chars().count()<=80&&!entity.contains([':', ';', '?', '.']){return Some(Frame::Alternative{subject,entity:entity.into()})}
+  }}
+ }
+ if bare.starts_with("con ")&&bare.ends_with(" thi sao"){return Some(Frame::Reply("Bạn muốn đổi nguyên nhân hay kết quả? Hãy nói: còn nguyên nhân X thì sao, hoặc còn kết quả X thì sao."))}
  for prefix in ["hay ghi nho rang ","ghi nho rang ","hay nho rang ","toi cho ban biet rang "] {
   if let Some(body)=bare.strip_prefix(prefix){
    let scene=VietnameseSemanticParser.parse(body);

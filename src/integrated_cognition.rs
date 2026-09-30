@@ -53,6 +53,8 @@ pub struct IntegratedCognition {
     topic: Option<String>,
     last_plan: Option<(String, String)>,
     last_question: Option<String>,
+    learned_language: crate::learned_language::LearnedLanguage,
+    last_evidence: Vec<String>,
     bindings: Vec<(String, crate::capability::DeviceAction)>,
     execution_failures: Vec<String>,
 }
@@ -91,6 +93,8 @@ impl IntegratedCognition {
         let head = head.trim();
         let body = body.trim();
         let mutation = [
+            "cach noi ",
+            "rut cach noi ",
             "nguon ",
             "quan sat ",
             "gia thuyet ",
@@ -128,8 +132,16 @@ impl IntegratedCognition {
 
     fn conversation(&mut self,input:&str)->Option<String>{
         use crate::conversation_language::{understand,Frame};
-        let Some(frame)=understand(input) else {self.last_question=None;self.topic=None;return None};
+        let expanded=self.learned_language.expand(input);
+        let Some(frame)=understand(expanded.as_deref().unwrap_or(input)) else {self.last_question=None;self.topic=None;return None};
         match frame {
+            Frame::Alternative{subject,entity}=>{
+                let Some(last)=self.last_question.as_ref() else{return Some("Hãy nêu câu hỏi quan hệ trước khi đổi đối tượng.".into())};
+                let scene=VietnameseSemanticParser.parse(last);
+                let Some(previous)=scene.query else{return Some("Ngữ cảnh chưa đủ rõ; hãy nêu lại hai đối tượng.".into())};
+                let (a,b)=if subject{(entity,previous.object.text)}else{(previous.subject.text,entity)};
+                Some(self.answer(&format!("{a} co gay ra {b} khong")))
+            },
             Frame::Question(q)=>{
                 if self.sources.is_empty() && !q.starts_with("no ") && !q.starts_with("dieu do "){return None}
                 Some(self.answer(&q))
@@ -146,10 +158,11 @@ impl IntegratedCognition {
                 Some(if matches!(frame,Frame::Brief){reply.split(" Đường suy luận:").next().unwrap_or(&reply).split(" Đã xét các nguồn:").next().unwrap_or(&reply).to_string()}else{reply})
             },
             Frame::Sources=>{
-                if self.last_question.is_none(){return Some("Chưa có câu hỏi gần đây để xác định nguồn. Bạn muốn kiểm tra điều gì?".into())}
-                let mut out=String::from("Các nguồn hiện có được dùng để xét câu hỏi (có thể gồm nguồn không liên quan trực tiếp; chưa xác minh độc lập):");
-                for source in self.sources.iter().filter(|s|s.kind!=SourceKind::Hypothesis).take(8){out.push_str(&format!("\n{}: {}",source.name,source.text));}
-                if self.sources.is_empty(){out.push_str(" chưa có.");}
+                let Some(q)=self.last_question.clone() else{return Some("Chưa có câu hỏi gần đây để xác định nguồn. Bạn muốn kiểm tra điều gì?".into())};
+                self.answer(&q);
+                let mut out=String::from("Nguồn của đường suy luận vừa xét (thông tin được báo lại, chưa xác minh độc lập):");
+                for name in &self.last_evidence {if let Some(source)=self.sources.iter().find(|s|&s.name==name){out.push_str(&format!("\n{}: {}",source.name,source.text));}}
+                if self.last_evidence.is_empty(){out.push_str(" chưa xác định được đường bằng chứng đơn nhất; hãy xem phần giải thích.");}
                 Some(out)
             },
             Frame::Reply(text)=>{if text.starts_with("Tôi chưa") {self.last_question=None;self.topic=None;}Some(text.into())},
@@ -158,6 +171,13 @@ impl IntegratedCognition {
     }
 
     fn execute(&mut self, head: &str, body: &str) -> (String, bool) {
+        if let Some(phrase)=head.strip_prefix("cach noi ") {
+            if body!="gay ra" {return ("Hiện chỉ học cách nói tương đương quan hệ gây ra; chưa ghi thay đổi.".into(),false)}
+            return if self.learned_language.teach(phrase){("Đã học cách diễn đạt. Tôi sẽ áp dụng cho đối tượng mới trong câu hỏi và câu dạy quan hệ.".into(),true)}else{("Cụm từ trùng, mơ hồ, không hợp lệ hoặc đã hết chỗ; chưa học thêm.".into(),false)};
+        }
+        if let Some(phrase)=head.strip_prefix("rut cach noi ") {
+            return if body.is_empty()&&self.learned_language.forget(phrase){("Đã rút cách nói đã học; các nguồn tri thức trước đó vẫn giữ nguyên.".into(),true)}else{("Không tìm thấy cách nói hoặc cú pháp chưa đúng.".into(),false)};
+        }
         for (prefix, kind) in [
             ("nguon ", SourceKind::Report),
             ("quan sat ", SourceKind::Observation),
@@ -458,6 +478,13 @@ impl IntegratedCognition {
                 *confidence = confidence.min(review.final_confidence)
             }
             _ => {}
+        }
+        self.last_evidence.clear();
+        if let OpenAnswer::Supported{path,..}|OpenAnswer::Opposed{path,..}=&answer {
+            for source in self.sources.iter().filter(|s|s.kind!=SourceKind::Hypothesis){
+                let parsed=reasoner.parse(&source.text);
+                if parsed.clauses.iter().take(8).any(|clause|path.windows(2).any(|pair|pair[0]==clause.subject.id&&pair[1]==clause.object.id)) {self.last_evidence.push(source.name.clone());}
+            }
         }
         let generated = GenerativeCognition.render(&answer, 1.0 - review.final_confidence);
         let mut text=format!("Về quan hệ giữa “{}” và “{}”: {}",query.subject.text,query.object.text,generated.text);
