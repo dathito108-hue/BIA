@@ -91,7 +91,11 @@ impl NaturalSurfaceRealizer {
             };
 
             out.push_str(prefix);
-            out.push_str(&lower_initial_when_safe(part.text.trim()));
+            if prefix.is_empty() && out.is_empty() {
+                out.push_str(part.text.trim());
+            } else {
+                out.push_str(&lower_initial_when_safe(part.text.trim()));
+            }
             ensure_sentence_end(&mut out);
         }
 
@@ -118,7 +122,7 @@ fn lower_initial_when_safe(text: &str) -> String {
 }
 
 fn ensure_sentence_end(out: &mut String) {
-    if !out.ends_with(['.', '!', '?']) {
+    if !(out.ends_with('.') || out.ends_with('!') || out.ends_with('?')) {
         out.push('.');
     }
 }
