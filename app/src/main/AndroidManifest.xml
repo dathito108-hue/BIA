@@ -36,6 +36,8 @@
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/game_accessibility" />
         </service>
+        <activity android:name=".MotionActivity" android:exported="false" />
+        <activity android:name=".ImageLabActivity" android:exported="false" />
         <activity android:name=".SceneActivity" android:exported="false" />
         <activity android:name=".CreativeActivity" android:exported="false" />
         <activity android:name=".ProductActivity" android:exported="false" />
