@@ -1,7 +1,7 @@
 package com.bia.mobile;
 import android.test.InstrumentationTestCase;
 public final class ConversationLanguageTest extends InstrumentationTestCase {
- protected void setUp(){MainActivity.nativeResetDialogueForTests();}
+ protected void setUp() throws Exception {super.setUp();MainActivity.nativeResetDialogueForTests();}
  String say(String s){return MainActivity.nativeChat(s,200000,0.9f,0.1f,0.1f,2048);}
  public void testNaturalDialogueUsesCoreEvidence(){
   assertTrue(say("Ghi nhớ rằng đèn sáng gây ra phòng sáng.").contains("ghi nguồn"));
