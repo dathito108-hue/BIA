@@ -1083,7 +1083,7 @@ impl IntegratedCognition {
             }
         }
         let policy = crate::contextual_dialogue_policy::ContextualDialoguePolicy::select(
-            self.dialogue_goal.current(),
+            self.dialogue_goal.current().unwrap_or(crate::dialogue_goal_state::ImplicitDialogueGoal::Explore),
             relation_continuity,
             &weave,
             uncertainty,
