@@ -148,12 +148,13 @@ impl IntegratedCognition {
             if !focus_valid {
                 return Some("Trọng tâm được yêu cầu chưa khớp rõ với hai đối tượng của câu hỏi hiện tại; hãy nêu lại đối tượng cần tập trung.".into());
             }
+            use crate::natural_surface::{NaturalSurfaceRealizer, SurfacePart, SurfaceSection};
             let mut parts=Vec::new();
-            if let Some(focus)=&plan.focus {
-                parts.push(format!("Trọng tâm: “{focus}”."));
-            }
             if plan.contains(ResponseSection::Explain) {
-                parts.push(format!("Giải thích: {}",self.answer_styled(&current,crate::expression_style::ExpressionStyle::Deep)));
+                parts.push(SurfacePart::new(
+                    SurfaceSection::Explain,
+                    self.answer_styled(&current,crate::expression_style::ExpressionStyle::Deep),
+                ));
             }
             if plan.contains(ResponseSection::ComparePrevious) {
                 let Some(previous)=previous.clone() else {
@@ -161,21 +162,30 @@ impl IntegratedCognition {
                 };
                 let prior=self.answer_styled(&previous,crate::expression_style::ExpressionStyle::Standard);
                 let now=self.answer_styled(&current,crate::expression_style::ExpressionStyle::Standard);
-                parts.push(format!("Đối chiếu: trường hợp trước — {prior} Trường hợp hiện tại — {now}"));
+                parts.push(SurfacePart::new(
+                    SurfaceSection::ComparePrevious,
+                    format!("trường hợp trước là: {prior} Còn trường hợp hiện tại là: {now}"),
+                ));
             }
             if plan.contains(ResponseSection::Summary) {
-                parts.push(format!("Tóm tắt: {}",self.answer_styled(&current,crate::expression_style::ExpressionStyle::Brief)));
+                parts.push(SurfacePart::new(
+                    SurfaceSection::Summary,
+                    self.answer_styled(&current,crate::expression_style::ExpressionStyle::Brief),
+                ));
             }
             if plan.contains(ResponseSection::ConclusionFromPrevious) {
                 let Some(previous)=previous else {
                     return Some("Chưa có trường hợp trước đủ rõ để dùng làm kết luận tham chiếu.".into());
                 };
-                parts.push(format!("Kết luận theo trường hợp trước: {}",self.answer_styled(&previous,crate::expression_style::ExpressionStyle::Brief)));
+                parts.push(SurfacePart::new(
+                    SurfaceSection::ConclusionFromPrevious,
+                    self.answer_styled(&previous,crate::expression_style::ExpressionStyle::Brief),
+                ));
             }
             if parts.is_empty() {
                 return Some("Kế hoạch trả lời sau khi loại các phần yêu cầu đã rỗng; hãy giữ lại ít nhất một mục.".into());
             }
-            return Some(parts.join("\n"));
+            return Some(NaturalSurfaceRealizer.compose(plan.focus.as_deref(), &parts));
         }
         if let Some(plan)=crate::compositional_dialogue::CompositeDialoguePlan::parse(input) {
             use crate::compositional_dialogue::DialogueGoal;
@@ -605,7 +615,13 @@ impl IntegratedCognition {
                 .style
         });
         let generated = GenerativeCognition.render_with_style(&answer, uncertainty, &weave, style);
-        let mut text=format!("Về quan hệ giữa “{}” và “{}”: {}",query.subject.text,query.object.text,generated.text);
+        let mut text=crate::natural_surface::NaturalSurfaceRealizer.relation(
+            &query.subject.text,
+            &query.object.text,
+            &generated.text,
+            style,
+            &weave,
+        );
         if style != crate::expression_style::ExpressionStyle::Brief {
             if let OpenAnswer::Supported{path,..}|OpenAnswer::Opposed{path,..}=&answer {
                 let named:Vec<_>=path.iter().filter_map(|id|labels.get(id).cloned()).collect();

@@ -1,6 +1,7 @@
 package com.bia.mobile;
 import android.test.InstrumentationTestCase;
 public final class GeneralTrainingTest extends InstrumentationTestCase {
+ protected void setUp() throws Exception {super.setUp();MainActivity.nativeResetDialogueForTests();}
  public void testTrainingThroughCanonicalChat(){
   String result=MainActivity.nativeChat("huấn luyện tổng quát",100000,0.9f,0.1f,0.1f,2048);
   assertTrue(result,result.contains("qualified_for_this_curriculum=true"));
