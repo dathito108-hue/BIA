@@ -1649,6 +1649,7 @@ pub mod contextual_pragmatics;
 pub mod conversational_implicature;
 pub mod dynamic_dialogue_intent;
 pub mod dialogue_goal_state;
+pub mod dialogue_repair;
 pub mod intent_fusion;
 pub mod natural_surface;
 pub mod duyen_weave;
