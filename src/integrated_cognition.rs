@@ -168,7 +168,7 @@ impl IntegratedCognition {
                     };
                     let Some(as_subject) = role else {
                         return Some(format!(
-                            "“{entity}” chưa có một vai duy nhất trong ngữ cảnh: nó có thể là nguyên nhân hoặc kết quả. Hãy nói rõ “còn nguyên nhân {entity} thì sao” hoặc “còn kết quả {entity} thì sao”."
+                            "“{entity}” chưa có một vai duy nhất trong ngữ cảnh. Bạn muốn xét nó ở vai nguyên nhân hay kết quả? Hãy nói rõ “còn nguyên nhân {entity} thì sao” hoặc “còn kết quả {entity} thì sao”."
                         ));
                     };
                     let question = if as_subject {
