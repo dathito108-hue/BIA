@@ -39,6 +39,17 @@ fn refuses_ellipsis_when_entity_has_both_semantic_roles() {
 }
 
 #[test]
+fn unrelated_global_role_is_not_enough_to_fill_ellipsis() {
+    let mut c = IntegratedCognition::default();
+    c.handle("Nguồn v158a: mưa gây ra đường trơn.");
+    c.handle("Nguồn v158b: nhiệt gây ra giãn nở.");
+    c.handle("Mưa có gây ra đường trơn không?");
+
+    let r = c.handle("Còn nhiệt thì sao?").expect("clarify");
+    assert!(r.contains("nguyên nhân hay kết quả"), "{r}");
+}
+
+#[test]
 fn explicit_topic_shift_clears_active_relation_but_not_sources() {
     let mut c = IntegratedCognition::default();
     c.handle("Nguồn v158a: mưa gây ra đường trơn.");
