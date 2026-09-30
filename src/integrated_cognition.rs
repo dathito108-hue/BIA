@@ -58,6 +58,7 @@ pub struct IntegratedCognition {
     last_evidence: Vec<String>,
     last_source_snapshot: Vec<(String, u64)>,
     dialogue_goal: crate::dialogue_goal_state::DialogueGoalState,
+    repair_pending: bool,
     bindings: Vec<(String, crate::capability::DeviceAction)>,
     execution_failures: Vec<String>,
 }
@@ -136,6 +137,15 @@ impl IntegratedCognition {
     fn conversation(&mut self,input:&str)->Option<String>{
         use crate::conversation_language::{understand,Frame};
         let normalized = normalize(input).trim().trim_end_matches(['?','!','.']).to_string();
+        if let Some(repair)=crate::dialogue_repair::detect(input,self.last_question.as_deref()) {
+            self.repair_pending=true;
+            if repair.repaired.is_empty() {
+                return Some(crate::dialogue_repair::repair_ack(&repair));
+            }
+            let ack=crate::dialogue_repair::repair_ack(&repair);
+            self.last_source_snapshot.clear();
+            return Some(ack);
+        }
         if let Some(goal)=crate::dialogue_goal_state::parse_goal(input) {
             use crate::dialogue_goal_state::ImplicitDialogueGoal;
             match goal {
@@ -198,6 +208,7 @@ impl IntegratedCognition {
                     self.last_question = None;
                     self.topic = None;
                     self.dialogue_goal.clear_active();
+                    self.repair_pending=false;
                     return Some(format!(
                         "Được, chuyển sang chủ đề “{topic}”. Mạch quan hệ trước vẫn được giữ trong lịch sử để bạn có thể quay lại khi cần."
                     ));
@@ -335,6 +346,7 @@ impl IntegratedCognition {
                 };
                 self.last_question=Some(q.clone());
                 self.dialogue_goal.bind_relation(&q);
+                self.repair_pending=false;
                 let scene=VietnameseSemanticParser.parse(&q);
                 let corrected=scene
                     .query
@@ -921,6 +933,7 @@ impl IntegratedCognition {
             self.continuity
                 .remember(&question, &query.subject.text, &query.object.text);
             self.dialogue_goal.bind_relation(&question);
+            self.repair_pending=false;
         }
         let mut labels=std::collections::HashMap::new();
         let mut world = WorldGraph::new(1024, 512);
