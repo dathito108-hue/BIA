@@ -1,6 +1,7 @@
 package com.bia.mobile;
 import android.test.InstrumentationTestCase;
 public final class LearnedLanguageTest extends InstrumentationTestCase {
+ protected void setUp(){MainActivity.nativeResetDialogueForTests();}
  String say(String s){return MainActivity.nativeChat(s,300000,0.9f,0.1f,0.1f,2048);}
  public void testLearnedExpressionAndRoleFollowup(){
   assertTrue(say("Cách nói làm phát sinh: gây ra").contains("Đã học"));
