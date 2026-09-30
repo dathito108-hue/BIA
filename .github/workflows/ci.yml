@@ -17,6 +17,11 @@ jobs:
       - run: cargo fmt
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --release
+      - run: cargo run --release --example train_v144 -- training-output
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BIA-V144-training
+          path: training-output/
       - run: cargo run --release --example v11_bench
       - run: cargo run --release --example v12_bench
       - run: cargo run --release --example v14_stress
