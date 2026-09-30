@@ -8,7 +8,7 @@ pub fn understand(input:&str)->Option<Frame>{
  for prefix in ["bia oi, ","bia oi ","bia, ","ban oi, "] {if let Some(rest)=s.strip_prefix(prefix){s=rest.to_string();break}}
  let bare=s.trim_end_matches(['?','!','.']).trim();
  match bare {
-  "xin chao"|"chao bia"|"chao ban"|"hello"=>return Some(Frame::Reply("Chào bạn. Bạn muốn hỏi, giải thích hay dạy BIA điều gì?")),
+  "xin chao"|"chao bia"|"chao ban"|"hello"=>return Some(Frame::Reply("Chào bạn. Tôi đang lắng nghe. Bạn muốn hỏi, giải thích hay dạy BIA điều gì?")),
   "cam on"|"cam on ban"|"cam on bia"=>return Some(Frame::Reply("Không có gì. Bạn có thể hỏi tiếp về điều vừa trao đổi.")),
   "ban la ai"|"bia la ai"=>return Some(Frame::Reply("Tôi là BIA. Tôi dùng tri thức và quan hệ đã ghi nhận để suy luận; khả năng hiểu và diễn đạt hiện còn giới hạn.")),
   "tai sao"|"vi sao"|"giai thich them"|"giai thich ro hon"|"tai sao lai nhu vay"=>return Some(Frame::Explain),
