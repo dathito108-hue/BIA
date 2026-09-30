@@ -446,7 +446,7 @@ impl IntegratedCognition {
                 consulted.push(source.name.as_str());
             }
         }
-        let mut answer = reasoner.answer_scene(&world, &scene);
+        let (mut answer, weave) = reasoner.answer_scene_with_weave(&world, &scene);
         let (support, opposition, depth, evidence) = match &answer {
             OpenAnswer::Supported { confidence, path, .. } => {
                 (*confidence, 0.0, path.len(), path.len().saturating_sub(1))
@@ -487,7 +487,7 @@ impl IntegratedCognition {
                 if parsed.clauses.iter().take(8).any(|clause|path.windows(2).any(|pair|pair[0]==clause.subject.id&&pair[1]==clause.object.id)) {self.last_evidence.push(source.name.clone());}
             }
         }
-        let generated = GenerativeCognition.render(&answer, 1.0 - review.final_confidence);
+        let generated = GenerativeCognition.render_with_weave(&answer, 1.0 - review.final_confidence, &weave);
         let mut text=format!("Về quan hệ giữa “{}” và “{}”: {}",query.subject.text,query.object.text,generated.text);
         if let OpenAnswer::Supported{path,..}|OpenAnswer::Opposed{path,..}=&answer {
             let named:Vec<_>=path.iter().filter_map(|id|labels.get(id).cloned()).collect();
