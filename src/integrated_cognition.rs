@@ -137,36 +137,6 @@ impl IntegratedCognition {
     fn conversation(&mut self,input:&str)->Option<String>{
         use crate::conversation_language::{understand,Frame};
         let normalized = normalize(input).trim().trim_end_matches(['?','!','.']).to_string();
-        if let Some(move_)=crate::dialogue_grounding::parse(input, self.last_question.as_deref()) {
-            use crate::dialogue_grounding::GroundingMove;
-            match move_ {
-                GroundingMove::CorrectRelation { question } => {
-                    self.grounding.note_repair();
-                    return Some(format!(
-                        "Hiểu rồi — tôi sửa mạch theo ý bạn. {}",
-                        self.answer(&question)
-                    ));
-                }
-                GroundingMove::ReplaceSubject { rejected, replacement } => {
-                    return Some(self.apply_grounding_entity_repair(
-                        &rejected,
-                        &replacement,
-                        true,
-                    ));
-                }
-                GroundingMove::ReplaceObject { rejected, replacement } => {
-                    return Some(self.apply_grounding_entity_repair(
-                        &rejected,
-                        &replacement,
-                        false,
-                    ));
-                }
-                GroundingMove::Clarify { prompt } => {
-                    self.grounding.note_unresolved();
-                    return Some(prompt);
-                }
-            }
-        }
         if let Some(goal)=crate::dialogue_goal_state::parse_goal(input) {
             use crate::dialogue_goal_state::ImplicitDialogueGoal;
             match goal {
@@ -219,6 +189,36 @@ impl IntegratedCognition {
                 }
                 ConversationAct::NewOnly => {
                     return Some(self.response_delta());
+                }
+            }
+        }
+        if let Some(move_)=crate::dialogue_grounding::parse(input, self.last_question.as_deref()) {
+            use crate::dialogue_grounding::GroundingMove;
+            match move_ {
+                GroundingMove::CorrectRelation { question } => {
+                    self.grounding.note_repair();
+                    return Some(format!(
+                        "Hiểu rồi — tôi sửa mạch theo ý bạn. {}",
+                        self.answer(&question)
+                    ));
+                }
+                GroundingMove::ReplaceSubject { rejected, replacement } => {
+                    return Some(self.apply_grounding_entity_repair(
+                        &rejected,
+                        &replacement,
+                        true,
+                    ));
+                }
+                GroundingMove::ReplaceObject { rejected, replacement } => {
+                    return Some(self.apply_grounding_entity_repair(
+                        &rejected,
+                        &replacement,
+                        false,
+                    ));
+                }
+                GroundingMove::Clarify { prompt } => {
+                    self.grounding.note_unresolved();
+                    return Some(prompt);
                 }
             }
         }
