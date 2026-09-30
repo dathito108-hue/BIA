@@ -56,6 +56,7 @@ pub struct IntegratedCognition {
     continuity: crate::conversation_continuity::ConversationContinuity,
     learned_language: crate::learned_language::LearnedLanguage,
     last_evidence: Vec<String>,
+    last_source_snapshot: Vec<(String, u64)>,
     bindings: Vec<(String, crate::capability::DeviceAction)>,
     execution_failures: Vec<String>,
 }
@@ -134,6 +135,44 @@ impl IntegratedCognition {
     fn conversation(&mut self,input:&str)->Option<String>{
         use crate::conversation_language::{understand,Frame};
         let normalized = normalize(input).trim().trim_end_matches(['?','!','.']).to_string();
+        if let Some(act) = crate::conversational_implicature::parse(input) {
+            use crate::conversational_implicature::ConversationAct;
+            match act {
+                ConversationAct::Acknowledge => {
+                    return Some(if self.last_question.is_some() {
+                        "Được. Tôi giữ mạch vừa rồi và không lặp lại phần đã rõ.".into()
+                    } else {
+                        "Được.".into()
+                    });
+                }
+                ConversationAct::Confirm => {
+                    let Some(q)=self.last_question.clone() else {
+                        return Some("Chưa có kết luận gần đây để xác nhận.".into());
+                    };
+                    let brief=self.answer_styled(&q,crate::expression_style::ExpressionStyle::Brief);
+                    return Some(format!("Nếu bạn đang xác nhận kết luận vừa rồi: {brief}"));
+                }
+                ConversationAct::Doubt => {
+                    let Some(q)=self.last_question.clone() else {
+                        return Some("Chưa có kết luận gần đây để kiểm tra lại.".into());
+                    };
+                    let deep=self.answer_styled(&q,crate::expression_style::ExpressionStyle::Deep);
+                    self.last_source_snapshot=self.relation_source_snapshot(&q);
+                    return Some(format!("Tôi kiểm tra lại mà không tăng độ chắc chỉ vì bị hỏi lại. {deep}"));
+                }
+                ConversationAct::Expand => {
+                    let Some(q)=self.last_question.clone() else {
+                        return Some("Chưa có câu hỏi gần đây để mở rộng.".into());
+                    };
+                    let deep=self.answer_styled(&q,crate::expression_style::ExpressionStyle::Deep);
+                    self.last_source_snapshot=self.relation_source_snapshot(&q);
+                    return Some(format!("Mở rộng thêm từ cùng mạch bằng chứng: {deep}"));
+                }
+                ConversationAct::NewOnly => {
+                    return Some(self.response_delta());
+                }
+            }
+        }
         if let Some(move_) = crate::contextual_pragmatics::parse(input) {
             use crate::contextual_pragmatics::PragmaticMove;
             match move_ {
@@ -332,7 +371,8 @@ impl IntegratedCognition {
             },
             Frame::Sources=>{
                 let Some(q)=self.last_question.clone() else{return Some("Chưa có câu hỏi gần đây để xác định nguồn. Bạn muốn kiểm tra điều gì?".into())};
-                self.answer(&q);
+                self.answer_restate(&q);
+                self.last_source_snapshot=self.relation_source_snapshot(&q);
                 let mut out=String::from("Nguồn của đường suy luận vừa xét (thông tin được báo lại, chưa xác minh độc lập):");
                 for name in &self.last_evidence {if let Some(source)=self.sources.iter().find(|s|&s.name==name){out.push_str(&format!("\n{}: {}",source.name,source.text));}}
                 if self.last_evidence.is_empty(){out.push_str(" chưa xác định được đường bằng chứng đơn nhất; hãy xem phần giải thích.");}
@@ -603,6 +643,64 @@ impl IntegratedCognition {
         }
     }
 
+    fn response_delta(&mut self) -> String {
+        let Some(q)=self.last_question.clone() else {
+            return "Chưa có câu trả lời gần đây để xác định phần mới.".into();
+        };
+        let before=self.last_source_snapshot.clone();
+        let current=self.relation_source_snapshot(&q);
+
+        let mut added=Vec::new();
+        let mut changed=Vec::new();
+        let mut removed=Vec::new();
+
+        for (name, sig) in &current {
+            match before.iter().find(|(old,_)|old==name) {
+                None => added.push(name.clone()),
+                Some((_,old_sig)) if old_sig!=sig => changed.push(name.clone()),
+                _ => {}
+            }
+        }
+        for (name, _) in &before {
+            if !current.iter().any(|(now,_)|now==name) {
+                removed.push(name.clone());
+            }
+        }
+
+        if added.is_empty() && changed.is_empty() && removed.is_empty() {
+            return "Chưa có bằng chứng mới liên quan đến quan hệ vừa xét; tôi không lặp lại phần cũ.".into();
+        }
+
+        let brief=self.answer_styled(&q,crate::expression_style::ExpressionStyle::Brief);
+        self.last_source_snapshot=current;
+
+        let mut delta=Vec::new();
+        if !added.is_empty(){delta.push(format!("nguồn thêm: {}",added.join(", ")));}
+        if !changed.is_empty(){delta.push(format!("nguồn thay đổi: {}",changed.join(", ")));}
+        if !removed.is_empty(){delta.push(format!("nguồn đã rút: {}",removed.join(", ")));}
+        format!("Phần mới — {}. Sau khi cập nhật: {brief}",delta.join("; "))
+    }
+
+    fn relation_source_snapshot(&self, question: &str) -> Vec<(String,u64)> {
+        let scene=VietnameseSemanticParser.parse(question);
+        let Some(query)=scene.query else{return Vec::new()};
+        let mut out=Vec::new();
+        for source in self.sources.iter().filter(|s|s.kind!=SourceKind::Hypothesis) {
+            let parsed=VietnameseSemanticParser.parse(&source.text);
+            let relevant=parsed.clauses.iter().take(8).any(|clause|{
+                clause.subject.id==query.subject.id
+                    || clause.object.id==query.object.id
+                    || clause.subject.id==query.object.id
+                    || clause.object.id==query.subject.id
+            });
+            if relevant {
+                out.push((source.name.clone(),source_signature(source)));
+            }
+        }
+        out.sort_by(|a,b|a.0.cmp(&b.0));
+        out
+    }
+
     fn update_topic(&mut self, text: &str) {
         let scene = VietnameseSemanticParser.parse(text);
         self.topic = if scene.clauses.len() == 1 {
@@ -722,9 +820,7 @@ impl IntegratedCognition {
                 }
             }
         }
-        if remember_turn {
-            self.last_evidence=current_evidence;
-        }
+        self.last_evidence=current_evidence;
         let uncertainty = 1.0 - review.final_confidence;
         let style = requested_style.unwrap_or_else(|| {
             crate::adaptive_expression::AdaptiveExpressionSelector
@@ -757,6 +853,9 @@ impl IntegratedCognition {
                     text.push_str(&format!(" Đã xét các nguồn: {}.", consulted.join(", ")));
                 }
             }
+        }
+        if remember_turn {
+            self.last_source_snapshot=self.relation_source_snapshot(&question);
         }
         text
     }
@@ -912,6 +1011,20 @@ impl IntegratedCognition {
         *self = next;
         true
     }
+}
+
+fn source_signature(source: &Source) -> u64 {
+    let mut h=0xcbf29ce484222325_u64;
+    for b in source.name.bytes().chain(std::iter::once(0)).chain(source.text.bytes()) {
+        h^=u64::from(b);
+        h=h.wrapping_mul(0x100000001b3);
+    }
+    h^=match source.kind {
+        SourceKind::Observation=>1,
+        SourceKind::Report=>2,
+        SourceKind::Hypothesis=>3,
+    };
+    h
 }
 
 fn valid_name(s: &str) -> bool {
