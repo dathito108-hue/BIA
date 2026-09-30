@@ -226,7 +226,14 @@ impl IntegratedCognition {
                     return Some("Tôi chưa tìm thấy đối tượng cần sửa trong lượt gần nhất; hãy nêu lại câu hỏi đầy đủ.".into());
                 };
                 self.last_question=Some(q.clone());
-                return Some(self.answer(&q));
+                let scene=VietnameseSemanticParser.parse(&q);
+                let corrected=scene
+                    .query
+                    .as_ref()
+                    .map(|query| query.object.text.as_str())
+                    .unwrap_or("đối tượng vừa nêu");
+                let answer=self.answer_restate(&q);
+                return Some(format!("Đã hiểu, bạn đang sửa đối tượng sang “{corrected}”. {answer}"));
             }
         }
         if matches!(normalized.as_str(), "y truoc"|"y vua roi"|"truong hop truoc"|"truong hop vua roi"|"truong hop kia") {
@@ -525,6 +532,10 @@ impl IntegratedCognition {
 
     fn answer_styled(&mut self, question: &str, style: crate::expression_style::ExpressionStyle) -> String {
         self.answer_internal(question, Some(style), false)
+    }
+
+    fn answer_restate(&mut self, question: &str) -> String {
+        self.answer_internal(question, None, false)
     }
 
     fn answer_internal(
