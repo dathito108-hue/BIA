@@ -1,0 +1,37 @@
+package com.bia.mobile;
+import android.app.*;
+import android.os.*;
+import android.content.*;
+import android.graphics.*;
+import android.view.*;
+import android.widget.*;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.*;
+
+public final class CreativeActivity extends Activity {
+    static final String[] KINDS={"mandala","landscape","box","sphere","vase"};
+    Spinner kind;EditText seed,detail,color,height;TextView status;Preview preview;CreativeEngine.Spec current,pending;Button generate,export,open;volatile boolean busy;
+    final ExecutorService worker=Executors.newSingleThreadExecutor();
+    @Override public void onCreate(Bundle state){super.onCreate(state);ScrollView scroll=new ScrollView(this);LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(20,16,20,16);scroll.addView(root);setContentView(scroll);
+        TextView intro=new TextView(this);intro.setText("Xưởng ảnh & 3D · V140\nTạo đồ họa thủ tục offline. Kéo trên mô hình để xoay. Ảnh 1024px, SVG hoặc OBJ; không tạo ảnh chân thực từ mô tả.");root.addView(intro);
+        kind=new Spinner(this);kind.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Ảnh hoa văn","Ảnh phong cảnh","3D khối hộp","3D hình cầu","3D bình trang trí (khối kín)"}));root.addView(kind);
+        seed=field(root,"Seed (số nguyên)","42");detail=field(root,"Độ chi tiết 8–48","24");color=field(root,"Màu #RRGGBB","#46BDAA");height=field(root,"Tỷ lệ cao 0.5–3","1.2");
+        generate=button(root,"Tạo / cập nhật");generate.setOnClickListener(v->{try{apply(read());}catch(Exception e){status.setText("Không tạo: "+e.getMessage());}});
+        preview=new Preview();root.addView(preview,new LinearLayout.LayoutParams(-1,(int)(320*getResources().getDisplayMetrics().density)));
+        export=button(root,"Xuất ZIP: ảnh / mô hình + tham số");export.setOnClickListener(v->{try{apply(read());pending=current;Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/zip").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"BIA-"+current.kind+".zip");startActivityForResult(i,1);}catch(Exception e){status.setText(e.getMessage());}});
+        open=button(root,"Mở tham số project.bia-art.json");open.setOnClickListener(v->startActivityForResult(new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE),2));
+        status=new TextView(this);root.addView(status);
+        try{String saved=state!=null?state.getString("project"):getPreferences(0).getString("project",null);current=saved==null?read():CreativeEngine.Spec.parse(saved);if(state!=null&&state.getString("pending")!=null)pending=CreativeEngine.Spec.parse(state.getString("pending"));fill(current);apply(current);}catch(Exception e){apply(new CreativeEngine.Spec("mandala",42,24,0xff46bdaa,1.2));status.setText("Bản lưu không hợp lệ; đã mở mẫu mặc định.");}
+    }
+    EditText field(LinearLayout root,String label,String value){TextView t=new TextView(this);t.setText(label);root.addView(t);EditText e=new EditText(this);e.setSingleLine();e.setText(value);root.addView(e);return e;}
+    Button button(LinearLayout root,String label){Button b=new Button(this);b.setText(label);root.addView(b);return b;}
+    CreativeEngine.Spec read(){String c=color.getText().toString().trim();if(!c.matches("#[0-9a-fA-F]{6}"))throw new IllegalArgumentException("Màu phải là #RRGGBB");return new CreativeEngine.Spec(KINDS[kind.getSelectedItemPosition()],Long.parseLong(seed.getText().toString().trim()),Integer.parseInt(detail.getText().toString().trim()),Color.parseColor(c),Double.parseDouble(height.getText().toString().trim()));}
+    void fill(CreativeEngine.Spec s){for(int i=0;i<KINDS.length;i++)if(KINDS[i].equals(s.kind))kind.setSelection(i);seed.setText(Long.toString(s.seed));detail.setText(Integer.toString(s.detail));color.setText(String.format(java.util.Locale.ROOT,"#%06X",s.color&0xffffff));height.setText(Double.toString(s.height));}
+    void apply(CreativeEngine.Spec s){current=s;preview.invalidate();try{getPreferences(0).edit().putString("project",s.json()).apply();}catch(Exception e){throw new IllegalStateException(e);}status.setText(s.mesh()?CreativeEngine.mesh(s).vertices.size()+" đỉnh · "+CreativeEngine.mesh(s).faces.size()+" tam giác":"Ảnh 1024×1024 · có bản SVG vector");}
+    void working(boolean value){busy=value;generate.setEnabled(!value);export.setEnabled(!value);open.setEnabled(!value);}
+    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(result!=RESULT_OK||data==null||data.getData()==null){pending=null;return;}final android.net.Uri uri=data.getData();final CreativeEngine.Spec captured=pending;working(true);status.setText("Đang xử lý tệp…");worker.execute(()->{String message;CreativeEngine.Spec imported=null;try{if(request==1){if(captured==null)throw new IOException("Thiếu cấu hình xuất; vui lòng xuất lại");try(OutputStream out=getContentResolver().openOutputStream(uri,"wt")){if(out==null)throw new IOException("Không mở được tệp");CreativeEngine.zip(captured,out);}message="Đã xuất ZIP.";}else{try(InputStream in=getContentResolver().openInputStream(uri)){if(in==null)throw new IOException("Không đọc được tệp");ByteArrayOutputStream b=new ByteArrayOutputStream();byte[] chunk=new byte[1024];for(int n;(n=in.read(chunk))!=-1;){b.write(chunk,0,n);if(b.size()>4096)throw new IOException("Tệp tham số tối đa 4 KB");}imported=CreativeEngine.Spec.parse(b.toString("UTF-8"));}message="Đã mở tham số.";}}catch(Exception e){message="Không hoàn thành: "+e.getMessage();}final String msg=message;final CreativeEngine.Spec loaded=imported;runOnUiThread(()->{if(isDestroyed())return;working(false);pending=null;if(loaded!=null){fill(loaded);apply(loaded);}status.setText(msg);});});}
+    @Override protected void onSaveInstanceState(Bundle b){super.onSaveInstanceState(b);try{if(current!=null)b.putString("project",current.json());if(pending!=null)b.putString("pending",pending.json());}catch(Exception ignored){}}
+    @Override protected void onDestroy(){worker.shutdown();super.onDestroy();}
+    final class Preview extends View {double yaw=0.65,pitch=0.35;float x,y;Preview(){super(CreativeActivity.this);setContentDescription("Xem ảnh hoặc kéo để xoay mô hình 3D");}protected void onDraw(Canvas c){if(current!=null)CreativeEngine.draw(c,getWidth(),getHeight(),current,yaw,pitch);}public boolean onTouchEvent(android.view.MotionEvent e){if(current==null||!current.mesh())return false;switch(e.getActionMasked()){case MotionEvent.ACTION_DOWN:x=e.getX();y=e.getY();getParent().requestDisallowInterceptTouchEvent(true);return true;case MotionEvent.ACTION_MOVE:yaw+=(e.getX()-x)*0.01;pitch=Math.max(-1.4,Math.min(1.4,pitch+(e.getY()-y)*0.01));x=e.getX();y=e.getY();invalidate();return true;case MotionEvent.ACTION_UP:performClick();case MotionEvent.ACTION_CANCEL:getParent().requestDisallowInterceptTouchEvent(false);return true;default:return true;}}public boolean performClick(){super.performClick();return true;}}
+}

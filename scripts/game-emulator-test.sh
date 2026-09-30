@@ -37,8 +37,11 @@ adb pull /sdcard/Android/data/com.bia.mobile/files/market-evidence.txt game-evid
 adb pull /sdcard/Android/data/com.bia.mobile/files/solana-evidence.txt game-evidence/solana-evidence.txt || true
 adb pull /sdcard/Android/data/com.bia.mobile/files/product-suite.zip game-evidence/product-suite.zip
 adb pull /sdcard/Android/data/com.bia.mobile/files/product-demo.zip game-evidence/product-demo.zip
+for name in creative-mandala.zip creative-landscape.zip creative-vase.zip creative-proof.png; do
+    adb pull "/sdcard/Android/data/com.bia.mobile/files/$name" "game-evidence/$name"
+done
 python3 - <<'PY'
 from pathlib import Path
 s=Path('game-evidence/instrumentation.txt').read_text()
-assert 'OK (19 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, s
+assert 'OK (23 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, s
 PY
