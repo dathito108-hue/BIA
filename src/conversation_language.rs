@@ -33,7 +33,6 @@ pub fn understand(input:&str)->Option<Frame>{
 }
 
 #[cfg(test)]mod tests{
- use super::*;
  use crate::integrated_cognition::IntegratedCognition;
  fn teach(c:&mut IntegratedCognition){assert!(c.handle("Hãy ghi nhớ rằng quạt chạy gây ra luồng gió.").unwrap().contains("ghi nguồn"));assert!(c.handle("Tôi cho bạn biết rằng luồng gió gây ra giấy bay.").unwrap().contains("ghi nguồn"));}
  #[test]fn paraphrase_and_followup_recompute(){let mut c=IntegratedCognition::default();teach(&mut c);let r=c.handle("BIA ơi, liệu quạt chạy có dẫn tới giấy bay không nhỉ?").unwrap();assert!(r.contains("2 mắt xích"),"{r}");assert!(r.contains("quat chay → luong gio → giay bay"),"{r}");assert!(c.handle("Tại sao lại như vậy?").unwrap().contains("2 mắt xích"));c.handle("Đính chính hoithoai1: luồng gió ngăn giấy bay.");assert!(c.handle("Giải thích rõ hơn").unwrap().contains("phản đối"));assert!(c.handle("Bạn dựa vào đâu?").unwrap().contains("ngan giay bay"));}
