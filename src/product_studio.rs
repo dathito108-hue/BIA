@@ -2,7 +2,7 @@
 use crate::integrated_cognition::hex;
 fn unhex(s: &str) -> Option<String> {
  if !s.len().is_multiple_of(2) || !s.is_ascii() { return None; }
- let bytes: Option<Vec<u8>> = s.as_bytes().chunks_exact(2).map(|p| u8::from_str_radix(std::str::from_utf8(p).ok()?,16).ok()).collect();
+ let bytes: Option<Vec<u8>> = s.as_bytes().as_chunks::<2>().0.iter().map(|p| u8::from_str_radix(std::str::from_utf8(p).ok()?,16).ok()).collect();
  String::from_utf8(bytes?).ok()
 }
 

@@ -25,6 +25,9 @@ public final class ProductStudioTest extends InstrumentationTestCase {
             js(a,"document.getElementById('name').value='<img src=x onerror=alert(1)>';"+fields+"document.getElementById('editor').requestSubmit();");assertEquals("1",js(a,"document.getElementById('rows').children.length"));assertEquals("0",js(a,"document.querySelectorAll('img').length"));String summary=js(a,"document.getElementById('summary').textContent");assertTrue(summary,summary.contains(kind.equals("quote")?"0.30":kind.equals("stock")?"1 tồn thấp":"1/1"));js(a,"window.BIA_READY=false;");getInstrumentation().runOnMainSync(()->a.web.reload());ready(a);assertEquals("1",js(a,"document.getElementById('rows').children.length"));
             if(kind.equals("stock")){js(a,"document.getElementById('name').value='Duplicate';sku.value='SKU-1';document.getElementById('editor').requestSubmit();");assertEquals("1",js(a,"document.getElementById('rows').children.length"));assertTrue(js(a,"document.getElementById('message').textContent").contains("Trùng"));}
             js(a,"document.getElementById('qa').click();");assertTrue(js(a,"document.getElementById('message').textContent").contains("4 kiểm tra"));
+            js(a,"document.querySelector('#rows button').click();document.getElementById('name').value='Updated';document.getElementById('editor').requestSubmit();");assertEquals("1",js(a,"document.getElementById('rows').children.length"));assertTrue(js(a,"document.getElementById('rows').textContent").contains("Updated"));
+            js(a,"window.confirm=()=>true;document.querySelectorAll('#rows button')[1].click();");assertEquals("0",js(a,"document.getElementById('rows').children.length"));
+
         }finally{js(a,"Object.keys(localStorage).filter(k=>k.includes('"+id+"')).forEach(k=>localStorage.removeItem(k));");getInstrumentation().runOnMainSync(a::finish);store.delete(build);}}}
     }
     public void testWorkbenchBuildsAndReopensSavedProduct()throws Exception{
