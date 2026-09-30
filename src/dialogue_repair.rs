@@ -28,17 +28,6 @@ pub fn detect(input: &str, current: Option<&str>) -> Option<DialogueRepair> {
         });
     }
 
-    if ["y toi la","y minh la","toi muon noi","khong, y la","khong phai y do"]
-        .iter().any(|p|t.starts_with(p)) {
-        let repaired=t.split_once(' ').map(|(_,r)|r.trim()).unwrap_or(t);
-        return Some(DialogueRepair{
-            kind:RepairKind::Clarify,
-            original:current.unwrap_or("").to_string(),
-            repaired:repaired.to_string(),
-            reason:"người dùng báo hiệu ý định sửa hoặc làm rõ".into()
-        });
-    }
-
     if ["ban hieu sai","hieu sai roi","khong dung y toi","sai y roi"]
         .iter().any(|p| t.starts_with(p)) {
         return Some(DialogueRepair{
