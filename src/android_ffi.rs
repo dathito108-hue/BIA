@@ -56,6 +56,17 @@ pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeChat(
 }
 
 #[no_mangle]
+pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeResetDialogueForTests(
+    _env: JNIEnv,
+    _class: JClass,
+) {
+    if let Ok(mut app) = runtime().lock() {
+        app.integrated = crate::integrated_cognition::IntegratedCognition::default();
+        app.dialogue = crate::dialogue::DialogueContext::new(24);
+    }
+}
+
+#[no_mangle]
 pub extern "system" fn Java_com_bia_mobile_MainActivity_nativeImmediateToken(
     mut env: JNIEnv,
     _class: JClass,
