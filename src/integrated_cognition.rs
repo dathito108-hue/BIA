@@ -797,6 +797,7 @@ impl IntegratedCognition {
         self.grounding.note_repair();
         self.last_question = Some(corrected.clone());
         self.topic = Some(query.subject.text.clone());
+        self.dialogue_goal.clear_active();
         self.dialogue_goal.bind_relation(&corrected);
         let reply = self.answer_styled(
             &corrected,
