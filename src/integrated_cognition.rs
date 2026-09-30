@@ -1044,13 +1044,15 @@ impl IntegratedCognition {
             uncertainty,
             self.last_evidence.len(),
         );
+        let open_plan = crate::open_dialogue::OpenDialoguePlan::from_synthesis(&synthesis);
         if style != crate::expression_style::ExpressionStyle::Brief {
-            text = synthesis.enrich(
+            text = synthesis.render(
                 text,
                 &query.subject.text,
                 &query.object.text,
                 &self.last_evidence,
             );
+            text = open_plan.compose(text, &query.subject.text, &query.object.text);
         }
         if remember_turn {
             self.last_source_snapshot=self.relation_source_snapshot(&question);
