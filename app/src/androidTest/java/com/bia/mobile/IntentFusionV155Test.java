@@ -9,9 +9,10 @@ public final class IntentFusionV155Test extends InstrumentationTestCase {
   say("Mưa có gây ra đường trơn không?");
   say("Gió có gây ra sóng không?");
   String r=say("Giải thích nhưng tập trung vào sóng, bỏ phần so sánh và kết luận theo trường hợp trước");
-  assertTrue(r,r.contains("Trọng tâm:"));
-  assertTrue(r,r.contains("Giải thích:"));
-  assertTrue(r,r.contains("Kết luận theo trường hợp trước:"));
-  assertFalse(r,r.contains("Đối chiếu:"));
+  assertTrue(r,r.contains("giữ trọng tâm"));
+  assertTrue(r,r.contains("Trước hết"));
+  assertTrue(r,r.contains("mốc tham chiếu"));
+  assertFalse(r,r.contains("Đặt cạnh trường hợp trước"));
+  assertFalse(r,r.contains("Giải thích:"));
  }
 }
