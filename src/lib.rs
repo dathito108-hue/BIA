@@ -98,6 +98,7 @@ pub use discovery::{ContextDiscovery, DiscoveredSimilarity};
 pub use duyen_token::{DuyenTokenDecoder, GeneratedSequence};
 pub use duyen_weave::DuyenWeave;
 pub use discourse_generator::{DiscourseMove, DiscoursePlan};
+pub use conversation_continuity::{ConversationContinuity, DiscourseTurn};
 pub use expression_style::ExpressionStyle;
 pub use adaptive_expression::{AdaptiveExpressionSelector, StyleDecision};
 pub use episodic::{Episode, EpisodeClause, EpisodicMemory};
@@ -1635,6 +1636,7 @@ pub mod core_tools;
 pub mod general_training;
 
 pub mod conversation_language;
+pub mod conversation_continuity;
 pub mod duyen_weave;
 pub mod discourse_generator;
 pub mod expression_style;

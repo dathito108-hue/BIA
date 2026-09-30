@@ -53,6 +53,7 @@ pub struct IntegratedCognition {
     topic: Option<String>,
     last_plan: Option<(String, String)>,
     last_question: Option<String>,
+    continuity: crate::conversation_continuity::ConversationContinuity,
     learned_language: crate::learned_language::LearnedLanguage,
     last_evidence: Vec<String>,
     bindings: Vec<(String, crate::capability::DeviceAction)>,
@@ -132,6 +133,24 @@ impl IntegratedCognition {
 
     fn conversation(&mut self,input:&str)->Option<String>{
         use crate::conversation_language::{understand,Frame};
+        let normalized = normalize(input).trim().trim_end_matches(['?','!','.']).to_string();
+        if matches!(normalized.as_str(), "y truoc"|"y vua roi"|"truong hop truoc"|"truong hop vua roi") {
+            let Some(q)=self.continuity.resolve_reference(&normalized) else {
+                return Some("Chưa có lượt hội thoại trước đủ rõ để tham chiếu.".into());
+            };
+            return Some(self.answer(&q));
+        }
+        if normalized.starts_with("cai thu nhat") || normalized.starts_with("doi tuong thu nhat")
+            || normalized.starts_with("cai thu hai") || normalized.starts_with("doi tuong thu hai") {
+            let key = if normalized.starts_with("cai thu nhat") || normalized.starts_with("doi tuong thu nhat") {"cai thu nhat"} else {"cai thu hai"};
+            let Some(entity)=self.continuity.resolve_reference(key) else {
+                return Some("Chưa có câu hỏi trước đủ rõ để xác định đối tượng được nhắc tới.".into());
+            };
+            if normalized.ends_with("thi sao") {
+                return Some(format!("Bạn đang nhắc tới “{entity}”. Bạn muốn xét nó ở vai nguyên nhân hay kết quả?"));
+            }
+            return Some(format!("Đối tượng được nhắc tới là “{entity}”."));
+        }
         let expanded=self.learned_language.expand(input);
         let Some(frame)=understand(expanded.as_deref().unwrap_or(input)) else {self.last_question=None;self.topic=None;return None};
         match frame {
@@ -432,6 +451,7 @@ impl IntegratedCognition {
         };
         self.topic = Some(query.subject.text.clone());
         self.last_question = Some(question.clone());
+        self.continuity.remember(&question, &query.subject.text, &query.object.text);
         let mut labels=std::collections::HashMap::new();
         let mut world = WorldGraph::new(1024, 512);
         let mut consulted = Vec::new();
