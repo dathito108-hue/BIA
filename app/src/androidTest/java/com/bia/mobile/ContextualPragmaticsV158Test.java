@@ -16,7 +16,7 @@ public final class ContextualPragmaticsV158Test extends InstrumentationTestCase 
   say("Nguồn v158d: bùn gây ra đường trơn.");
   say("Mưa có gây ra đường trơn không?");
   String ambiguous=say("Thế còn bùn thì sao?");
-  assertTrue(ambiguous,ambiguous.contains("nguyên nhân hoặc kết quả"));
+  assertTrue(ambiguous,ambiguous.contains("nguyên nhân hay kết quả"));
 
   String shifted=say("Chuyển chủ đề sang âm nhạc");
   assertTrue(shifted,shifted.contains("am nhac"));
