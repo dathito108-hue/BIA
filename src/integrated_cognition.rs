@@ -52,6 +52,7 @@ pub struct IntegratedCognition {
     journal: Vec<String>,
     topic: Option<String>,
     last_plan: Option<(String, String)>,
+    last_question: Option<String>,
     bindings: Vec<(String, crate::capability::DeviceAction)>,
     execution_failures: Vec<String>,
 }
@@ -108,7 +109,7 @@ impl IntegratedCognition {
             || head == "suy rong"
             || head == "lap lai ke hoach";
         if !recognized {
-            return None;
+            return self.conversation(input);
         }
         if input.chars().count() > MAX_INPUT {
             return Some("Yêu cầu quá dài; hãy chia nhỏ dưới 1.024 ký tự.".into());
@@ -123,6 +124,37 @@ impl IntegratedCognition {
             self.journal.push(input.to_string());
         }
         Some(reply)
+    }
+
+    fn conversation(&mut self,input:&str)->Option<String>{
+        use crate::conversation_language::{understand,Frame};
+        let Some(frame)=understand(input) else {self.last_question=None;self.topic=None;return None};
+        match frame {
+            Frame::Question(q)=>{
+                if self.sources.is_empty() && !q.starts_with("no ") && !q.starts_with("dieu do "){return None}
+                Some(self.answer(&q))
+            },
+            Frame::Remember(body)=>{
+                let mut number=self.journal.len();
+                while self.sources.iter().any(|s|s.name==format!("hoithoai{number}")){number+=1;}
+                self.handle(&format!("Nguồn hoithoai{number}: {body}"))
+            },
+            Frame::Explain|Frame::Brief=>{
+                let Some(q)=self.last_question.clone() else{return Some("Bạn muốn tôi giải thích câu hỏi nào? Hãy nêu lại nội dung.".into())};
+                let reply=self.answer(&q);
+                // A short answer keeps the verdict and uncertainty, removes only path/source detail.
+                Some(if matches!(frame,Frame::Brief){reply.split(" Đường suy luận:").next().unwrap_or(&reply).split(" Đã xét các nguồn:").next().unwrap_or(&reply).to_string()}else{reply})
+            },
+            Frame::Sources=>{
+                if self.last_question.is_none(){return Some("Chưa có câu hỏi gần đây để xác định nguồn. Bạn muốn kiểm tra điều gì?".into())}
+                let mut out=String::from("Các nguồn hiện có được dùng để xét câu hỏi (có thể gồm nguồn không liên quan trực tiếp; chưa xác minh độc lập):");
+                for source in self.sources.iter().filter(|s|s.kind!=SourceKind::Hypothesis).take(8){out.push_str(&format!("\n{}: {}",source.name,source.text));}
+                if self.sources.is_empty(){out.push_str(" chưa có.");}
+                Some(out)
+            },
+            Frame::Reply(text)=>{if text.starts_with("Tôi chưa") {self.last_question=None;self.topic=None;}Some(text.into())},
+            Frame::Clarify=>Some("“Nó/điều đó” chưa rõ chỉ đối tượng nào; hãy nêu tên cụ thể.".into()),
+        }
     }
 
     fn execute(&mut self, head: &str, body: &str) -> (String, bool) {
@@ -368,6 +400,8 @@ impl IntegratedCognition {
             return "Tôi chưa phân tích được câu hỏi này; thử “A có dẫn tới B không?”.".into();
         };
         self.topic = Some(query.subject.text.clone());
+        self.last_question = Some(question.clone());
+        let mut labels=std::collections::HashMap::new();
         let mut world = WorldGraph::new(1024, 512);
         let mut consulted = Vec::new();
         for source in &self.sources {
@@ -383,6 +417,8 @@ impl IntegratedCognition {
                 0.75
             };
             for clause in &mut parsed.clauses {
+                labels.insert(clause.subject.id,clause.subject.text.clone());
+                labels.insert(clause.object.id,clause.object.text.clone());
                 clause.confidence *= quality.sqrt();
             }
             VietnameseSemanticParser.ingest(&mut world, &parsed, 0);
@@ -423,9 +459,12 @@ impl IntegratedCognition {
             }
             _ => {}
         }
-        let mut text = GenerativeCognition
-            .render(&answer, 1.0 - review.final_confidence)
-            .text;
+        let generated = GenerativeCognition.render(&answer, 1.0 - review.final_confidence);
+        let mut text=format!("Về quan hệ giữa “{}” và “{}”: {}",query.subject.text,query.object.text,generated.text);
+        if let OpenAnswer::Supported{path,..}|OpenAnswer::Opposed{path,..}=&answer {
+            let named:Vec<_>=path.iter().filter_map(|id|labels.get(id).cloned()).collect();
+            if named.len()==path.len(){text.push_str(&format!(" Đường suy luận: {}. Đây là quan hệ trong nguồn đã ghi, chưa phải xác minh độc lập.",named.join(" → ")));}
+        }
         if !consulted.is_empty() {
             text.push_str(&format!(" Đã xét các nguồn: {}.", consulted.join(", ")));
         }
