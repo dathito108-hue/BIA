@@ -1135,6 +1135,12 @@ impl IntegratedCognition {
             synthesis.moves.push(crate::dialogue_synthesis::DialogueMove::Answer);
         }
         synthesis.moves.truncate(6);
+        let composition = crate::causal_dialogue_composer::CausalDialogueComposition::build(
+            &policy.actions,
+            &weave,
+            uncertainty,
+            self.last_evidence.len(),
+        );
         let open_plan = crate::open_dialogue::OpenDialoguePlan::from_synthesis(&synthesis);
         if style != crate::expression_style::ExpressionStyle::Brief {
             text = synthesis.render(
