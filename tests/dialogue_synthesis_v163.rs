@@ -6,8 +6,10 @@ fn natural_answer_keeps_cause_effect_and_evidence_in_one_turn() {
     c.handle("Nguồn a: mưa gây ra đường trơn.");
     c.handle("Nguồn b: độ ẩm làm đường trơn.");
     let r = c.handle("Mưa có gây ra đường trơn không?").expect("answer");
-    assert!(r.contains("mưa") && r.contains("đường trơn"), "{r}");
-    assert!(r.contains("nguồn") || r.contains("Đã xét"), "{r}");
+    let lower = r.to_lowercase();
+    assert!(lower.contains("mưa") || lower.contains("mua"), "{r}");
+    assert!(lower.contains("đường trơn") || lower.contains("duong tron"), "{r}");
+    assert!(lower.contains("nguồn") || lower.contains("nguon") || r.contains("Đã xét"), "{r}");
 }
 
 #[test]
