@@ -29,15 +29,39 @@ impl ConversationContinuity {
         self.turns.last()
     }
 
+    pub fn previous(&self) -> Option<&DiscourseTurn> {
+        self.turns.len().checked_sub(2).and_then(|i| self.turns.get(i))
+    }
+
+    pub fn correct_last_entity(&mut self, replacement: &str, rejected: &str) -> Option<String> {
+        let replacement = normalize(replacement).trim().to_string();
+        let rejected = normalize(rejected).trim().to_string();
+        if replacement.is_empty() || rejected.is_empty() || replacement == rejected {
+            return None;
+        }
+        let last = self.turns.last_mut()?;
+        if last.subject == rejected {
+            last.subject = replacement.clone();
+            last.question = format!("{} co gay ra {} khong", replacement, last.object);
+            return Some(last.question.clone());
+        }
+        if last.object == rejected {
+            last.object = replacement.clone();
+            last.question = format!("{} co gay ra {} khong", last.subject, replacement);
+            return Some(last.question.clone());
+        }
+        None
+    }
+
     pub fn resolve_reference(&self, input: &str) -> Option<String> {
         let s = normalize(input);
         let last = self.last()?;
 
-        if matches!(
-            s.as_str(),
-            "y truoc" | "y vua roi" | "truong hop truoc" | "truong hop vua roi"
-        ) {
+        if matches!(s.as_str(), "y vua roi" | "truong hop vua roi") {
             return Some(last.question.clone());
+        }
+        if matches!(s.as_str(), "y truoc" | "truong hop truoc" | "truong hop kia") {
+            return self.previous().map(|turn| turn.question.clone()).or_else(|| Some(last.question.clone()));
         }
 
         if matches!(s.as_str(), "cai thu hai" | "doi tuong thu hai") {
@@ -73,6 +97,10 @@ mod tests {
         assert_eq!(
             c.resolve_reference("ý vừa rồi").as_deref(),
             Some("mua co gay ra duong uot khong")
+        );
+        assert_eq!(
+            c.correct_last_entity("duong tron", "duong uot").as_deref(),
+            Some("mua co gay ra duong tron khong")
         );
     }
 }
