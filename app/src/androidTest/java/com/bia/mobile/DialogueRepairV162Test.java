@@ -8,7 +8,7 @@ public final class DialogueRepairV162Test extends InstrumentationTestCase {
   say("Mưa có gây ra đường trơn không?");
   String r=say("Bạn hiểu sai rồi");
   assertTrue(r,r.contains("điểm lệch"));
-  String q=say("Ý tôi là hỏi nguyên nhân của đường trơn");
+  String q=say("Không phải đường ướt");
   assertTrue(q,q.contains("sửa mạch hiểu"));
   String next=say("Mưa có gây ra đường trơn không?");
   assertTrue(next,next.contains("đường trơn")||next.contains("bằng chứng"));
