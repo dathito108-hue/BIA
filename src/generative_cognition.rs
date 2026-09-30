@@ -1,6 +1,7 @@
 use crate::duyen_weave::DuyenWeave;
 use crate::discourse_generator::{DiscourseMove, DiscoursePlan};
 use crate::open_reasoning::OpenAnswer;
+use crate::expression_style::ExpressionStyle;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ResponseStance {
@@ -33,12 +34,22 @@ impl GenerativeCognition {
         uncertainty: f32,
         weave: &DuyenWeave,
     ) -> GeneratedThought {
+        self.render_with_style(answer, uncertainty, weave, ExpressionStyle::Standard)
+    }
+
+    pub fn render_with_style(
+        &self,
+        answer: &OpenAnswer,
+        uncertainty: f32,
+        weave: &DuyenWeave,
+        style: ExpressionStyle,
+    ) -> GeneratedThought {
         let plan = DiscoursePlan::build(answer, weave);
         match answer {
             OpenAnswer::Supported { confidence, path } => {
                 let confidence = calibrated(*confidence, uncertainty);
                 GeneratedThought {
-                    text: compose_supported(confidence, path.len().saturating_sub(1), weave, &plan),
+                    text: compose_supported(confidence, path.len().saturating_sub(1), weave, &plan, style),
                     stance: if confidence >= 0.75 { ResponseStance::Certain } else { ResponseStance::Cautious },
                     confidence,
                     evidence_depth: path.len().saturating_sub(1),
@@ -47,7 +58,7 @@ impl GenerativeCognition {
             OpenAnswer::Opposed { confidence, path } => {
                 let confidence = calibrated(*confidence, uncertainty);
                 GeneratedThought {
-                    text: compose_opposed(confidence, path.len().saturating_sub(1), weave, &plan),
+                    text: compose_opposed(confidence, path.len().saturating_sub(1), weave, &plan, style),
                     stance: ResponseStance::Cautious,
                     confidence,
                     evidence_depth: path.len().saturating_sub(1),
@@ -106,7 +117,7 @@ fn calibrated(confidence: f32, uncertainty: f32) -> f32 {
     (confidence * (1.0 - uncertainty.clamp(0.0,1.0) * 0.35)).clamp(0.0,1.0)
 }
 
-fn compose_supported(confidence: f32, depth: usize, weave: &DuyenWeave, plan: &DiscoursePlan) -> String {
+fn compose_supported(confidence: f32, depth: usize, weave: &DuyenWeave, plan: &DiscoursePlan, style: ExpressionStyle) -> String {
     let opening = if confidence >= 0.85 {
         "Các Duyên hiện tại ủng hộ mạnh kết luận này."
     } else if confidence >= 0.65 {
@@ -114,6 +125,12 @@ fn compose_supported(confidence: f32, depth: usize, weave: &DuyenWeave, plan: &D
     } else {
         "Có tín hiệu ủng hộ, nhưng mức chắc chắn vẫn còn giới hạn."
     };
+    if style == ExpressionStyle::Brief {
+        return format!("{} Mức chắc chắn khoảng {:.0}%.", opening, confidence * 100.0);
+    }
+    if style == ExpressionStyle::Brief {
+        return format!("{} Mức chắc chắn khoảng {:.0}%.", opening, confidence * 100.0);
+    }
     if weave.is_overlapping() {
         let mut text = format!(
             "{} Có {} nhánh Duyên cùng tham gia và {} điểm hội tụ; nhánh rõ nhất sâu {} mắt xích.",
@@ -124,6 +141,12 @@ fn compose_supported(confidence: f32, depth: usize, weave: &DuyenWeave, plan: &D
         );
         if plan.moves.contains(&DiscourseMove::Opposition) {
             text.push_str(" Một phần Duyên có tác dụng phản chiều nên không nên quy kết kết quả cho một nguyên nhân duy nhất.");
+        }
+        if style == ExpressionStyle::Deep {
+            text.push_str(&format!(" Mạng hiện có {} liên kết dùng chung giữa các nhánh.", weave.shared_links));
+        }
+        if style == ExpressionStyle::Deep {
+            text.push_str(&format!(" Có {} điểm hội tụ và {} liên kết dùng chung trong mạng.", weave.convergence_nodes.len(), weave.shared_links));
         }
         if plan.moves.contains(&DiscourseMove::Limitation) {
             text.push_str(&format!(" Mức chắc chắn hiện khoảng {:.0}%.", confidence * 100.0));
@@ -139,7 +162,7 @@ fn compose_supported(confidence: f32, depth: usize, weave: &DuyenWeave, plan: &D
     }
 }
 
-fn compose_opposed(confidence: f32, depth: usize, weave: &DuyenWeave, plan: &DiscoursePlan) -> String {
+fn compose_opposed(confidence: f32, depth: usize, weave: &DuyenWeave, plan: &DiscoursePlan, style: ExpressionStyle) -> String {
     let opening = if confidence >= 0.80 {
         "Bằng chứng phản đối đang chiếm ưu thế."
     } else {
