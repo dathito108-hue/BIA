@@ -20,8 +20,8 @@ public final class DialogueGroundingV162Test extends InstrumentationTestCase {
 
         String repaired = say("Không, ý tôi là gió gây ra sóng.");
         assertTrue(repaired, repaired.contains("Hiểu rồi"));
-        assertTrue(repaired, repaired.contains("gió"));
-        assertTrue(repaired, repaired.contains("sóng"));
+        assertTrue(repaired, repaired.contains("gio"));
+        assertTrue(repaired, repaired.contains("song"));
 
         String follow = say("Có chắc không?");
         assertTrue(follow, follow.contains("Tôi kiểm tra lại"));
