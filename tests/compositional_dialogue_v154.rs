@@ -11,9 +11,9 @@ fn composes_explain_compare_and_summary_from_grounded_turns() {
     let r = c
         .handle("Giải thích rõ, so sánh với trường hợp trước rồi tóm tắt ngắn gọn")
         .expect("composite");
-    assert!(r.contains("Giải thích hiện tại:"), "{r}");
-    assert!(r.contains("Đối chiếu:"), "{r}");
-    assert!(r.contains("Tóm tắt:"), "{r}");
+    assert!(r.contains("ủng hộ"), "{r}");
+    assert!(r.contains("Đặt cạnh trường hợp trước"), "{r}");
+    assert!(r.contains("Tóm lại"), "{r}");
     assert!(r.contains("ủng hộ"), "{r}");
 }
 

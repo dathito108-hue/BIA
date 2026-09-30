@@ -1,3 +1,4 @@
+use crate::conversation_continuity::RelationContinuity;
 use crate::duyen_weave::DuyenWeave;
 use crate::expression_style::ExpressionStyle;
 
@@ -37,25 +38,56 @@ impl NaturalSurfaceRealizer {
         style: ExpressionStyle,
         weave: &DuyenWeave,
     ) -> String {
+        self.relation_contextual(
+            subject,
+            object,
+            body,
+            style,
+            weave,
+            RelationContinuity::New,
+        )
+    }
+
+    pub fn relation_contextual(
+        &self,
+        subject: &str,
+        object: &str,
+        body: &str,
+        style: ExpressionStyle,
+        weave: &DuyenWeave,
+        continuity: RelationContinuity,
+    ) -> String {
         let body = body.trim();
         if style == ExpressionStyle::Brief {
             return body.to_string();
         }
 
-        let lead = match (style, weave.is_overlapping()) {
-            (ExpressionStyle::Deep, true) => format!(
-                "Nếu nhìn theo các Duyên đang chồng lên nhau giữa “{subject}” và “{object}”,"
-            ),
-            (ExpressionStyle::Deep, false) => {
-                format!("Xét kỹ quan hệ giữa “{subject}” và “{object}”,")
+        let lead = match continuity {
+            RelationContinuity::Repeat => "Vẫn ở quan hệ này,".to_string(),
+            RelationContinuity::SameSubject => {
+                format!("Tiếp theo mạch về “{subject}”, khi xét đến “{object}”,")
             }
-            (ExpressionStyle::Standard, true) => format!(
-                "Trong quan hệ giữa “{subject}” và “{object}”, có nhiều Duyên cùng tham gia;"
-            ),
-            (ExpressionStyle::Standard, false) => {
-                format!("Với quan hệ giữa “{subject}” và “{object}”,")
+            RelationContinuity::SameObject => {
+                format!("Vẫn với kết quả “{object}”, nhưng khi xét từ “{subject}”,")
             }
-            (ExpressionStyle::Brief, _) => unreachable!(),
+            RelationContinuity::Return => {
+                format!("Quay lại quan hệ giữa “{subject}” và “{object}”,")
+            }
+            RelationContinuity::New => match (style, weave.is_overlapping()) {
+                (ExpressionStyle::Deep, true) => format!(
+                    "Nếu nhìn theo các Duyên đang chồng lên nhau giữa “{subject}” và “{object}”,"
+                ),
+                (ExpressionStyle::Deep, false) => {
+                    format!("Xét kỹ quan hệ giữa “{subject}” và “{object}”,")
+                }
+                (ExpressionStyle::Standard, true) => format!(
+                    "Trong quan hệ giữa “{subject}” và “{object}”, có nhiều Duyên cùng tham gia;"
+                ),
+                (ExpressionStyle::Standard, false) => {
+                    format!("Với quan hệ giữa “{subject}” và “{object}”,")
+                }
+                (ExpressionStyle::Brief, _) => unreachable!(),
+            },
         };
 
         format!("{lead} {}", lower_initial_when_safe(body))
@@ -151,6 +183,32 @@ mod tests {
         assert!(text.starts_with("Nếu nhìn theo các Duyên đang chồng lên nhau"));
         assert!(text.contains("mưa"));
         assert!(text.contains("đường trơn"));
+    }
+
+    #[test]
+    fn continuity_changes_opening_without_changing_grounded_body() {
+        let weave = DuyenWeave::default();
+        let body = "Các Duyên hiện tại nghiêng về phía ủng hộ kết luận này.";
+        let same_subject = NaturalSurfaceRealizer.relation_contextual(
+            "mưa",
+            "bùn",
+            body,
+            ExpressionStyle::Standard,
+            &weave,
+            RelationContinuity::SameSubject,
+        );
+        let repeat = NaturalSurfaceRealizer.relation_contextual(
+            "mưa",
+            "bùn",
+            body,
+            ExpressionStyle::Standard,
+            &weave,
+            RelationContinuity::Repeat,
+        );
+        assert!(same_subject.starts_with("Tiếp theo mạch về"));
+        assert!(repeat.starts_with("Vẫn ở quan hệ này"));
+        assert!(same_subject.contains("ủng hộ kết luận này"));
+        assert!(repeat.contains("ủng hộ kết luận này"));
     }
 
     #[test]
