@@ -1,3 +1,4 @@
+use crate::duyen_weave::DuyenWeave;
 use crate::reasoning::{CausalReasoner, CounterfactualVerdict, ReasoningVerdict};
 use crate::semantic::{QueryKind, SemanticQuery, SemanticScene, VietnameseSemanticParser};
 use crate::world::WorldGraph;
@@ -7,14 +8,17 @@ pub enum OpenAnswer {
     Supported {
         confidence: f32,
         path: Vec<u64>,
+        weave: DuyenWeave,
     },
     Opposed {
         confidence: f32,
         path: Vec<u64>,
+        weave: DuyenWeave,
     },
     Contradicted {
         support: f32,
         opposition: f32,
+        weave: DuyenWeave,
     },
     Counterfactual {
         support_delta: f32,
@@ -86,10 +90,12 @@ impl SemanticReasoner {
 }
 
 fn answer_causal(verdict: ReasoningVerdict, source: u64) -> OpenAnswer {
+    let weave = DuyenWeave::from_paths(&verdict.paths, verdict.target);
     if verdict.contradicted {
         return OpenAnswer::Contradicted {
             support: verdict.support,
             opposition: verdict.opposition,
+            weave,
         };
     }
 
@@ -104,11 +110,13 @@ fn answer_causal(verdict: ReasoningVerdict, source: u64) -> OpenAnswer {
         OpenAnswer::Opposed {
             confidence: verdict.confidence,
             path: path.nodes,
+            weave,
         }
     } else {
         OpenAnswer::Supported {
             confidence: verdict.confidence,
             path: path.nodes,
+            weave,
         }
     }
 }
