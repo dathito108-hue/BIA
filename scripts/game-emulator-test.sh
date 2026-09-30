@@ -43,7 +43,7 @@ done
 python3 - <<'PY'
 from pathlib import Path
 s=Path('game-evidence/instrumentation.txt').read_text()
-assert 'OK (50 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, s
+assert 'OK (51 tests)' in s and 'FAILURES' not in s and 'INSTRUMENTATION_FAILED' not in s, s
 PY
 
 npm install --prefix /tmp/bia-gltf-validation --ignore-scripts --no-audit --no-fund gltf-validator@2.0.0-dev.3.10

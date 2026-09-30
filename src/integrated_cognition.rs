@@ -134,6 +134,56 @@ impl IntegratedCognition {
     fn conversation(&mut self,input:&str)->Option<String>{
         use crate::conversation_language::{understand,Frame};
         let normalized = normalize(input).trim().trim_end_matches(['?','!','.']).to_string();
+        if let Some(move_) = crate::contextual_pragmatics::parse(input) {
+            use crate::contextual_pragmatics::PragmaticMove;
+            match move_ {
+                PragmaticMove::TopicShift(topic) => {
+                    self.last_question = None;
+                    self.topic = None;
+                    return Some(format!(
+                        "Được, chuyển sang chủ đề “{topic}”. Mạch quan hệ trước vẫn được giữ trong lịch sử để bạn có thể quay lại khi cần."
+                    ));
+                }
+                PragmaticMove::EllipticEntity(entity) => {
+                    let Some(current) = self.last_question.clone() else {
+                        return Some(
+                            "Chưa có quan hệ hiện tại để điền phần bị lược; hãy nêu câu hỏi đầy đủ một lần."
+                                .into(),
+                        );
+                    };
+                    let scene = VietnameseSemanticParser.parse(&current);
+                    let Some(query) = scene.query else {
+                        return Some(
+                            "Ngữ cảnh hiện tại chưa đủ rõ để suy ra phần bị lược; hãy nêu nguyên nhân hoặc kết quả."
+                                .into(),
+                        );
+                    };
+                    let entity = normalize(&entity).trim().to_string();
+                    let role = if entity == query.subject.text && entity != query.object.text {
+                        Some(true)
+                    } else if entity == query.object.text && entity != query.subject.text {
+                        Some(false)
+                    } else {
+                        self.pragmatic_entity_role(
+                            &entity,
+                            &query.subject.text,
+                            &query.object.text,
+                        )
+                    };
+                    let Some(as_subject) = role else {
+                        return Some(format!(
+                            "“{entity}” chưa có một vai duy nhất trong ngữ cảnh. Bạn muốn xét nó ở vai nguyên nhân hay kết quả? Hãy nói rõ “còn nguyên nhân {entity} thì sao” hoặc “còn kết quả {entity} thì sao”."
+                        ));
+                    };
+                    let question = if as_subject {
+                        format!("{entity} co gay ra {} khong", query.object.text)
+                    } else {
+                        format!("{} co gay ra {entity} khong", query.subject.text)
+                    };
+                    return Some(self.answer(&question));
+                }
+            }
+        }
         if let Some(plan)=crate::intent_fusion::IntentFusionPlan::parse(input) {
             use crate::intent_fusion::ResponseSection;
             let Some(current)=self.last_question.clone() else {
@@ -515,6 +565,42 @@ impl IntegratedCognition {
                 target.trim(), examples[0].outcome, examples.len(), class.trim()), false);
         }
         invalid()
+    }
+
+    fn pragmatic_entity_role(
+        &self,
+        entity: &str,
+        current_subject: &str,
+        current_object: &str,
+    ) -> Option<bool> {
+        let entity = normalize(entity).trim().to_string();
+        let current_subject = normalize(current_subject).trim().to_string();
+        let current_object = normalize(current_object).trim().to_string();
+        if entity.is_empty() || current_subject.is_empty() || current_object.is_empty() {
+            return None;
+        }
+
+        let (mut as_subject, mut as_object) = self
+            .continuity
+            .contextual_role_flags(&entity, &current_subject, &current_object);
+        let parser = VietnameseSemanticParser;
+        for source in self.sources.iter().filter(|s| s.kind != SourceKind::Hypothesis) {
+            let scene = parser.parse(&source.text);
+            for clause in scene.clauses.iter().take(8) {
+                if clause.subject.text == entity && clause.object.text == current_object {
+                    as_subject = true;
+                }
+                if clause.object.text == entity && clause.subject.text == current_subject {
+                    as_object = true;
+                }
+            }
+        }
+
+        match (as_subject, as_object) {
+            (true, false) => Some(true),
+            (false, true) => Some(false),
+            _ => None,
+        }
     }
 
     fn update_topic(&mut self, text: &str) {

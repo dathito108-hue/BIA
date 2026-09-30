@@ -78,6 +78,33 @@ impl ConversationContinuity {
             .any(|turn| turn.subject == subject && turn.object == object)
     }
 
+    pub fn role_flags(&self, entity: &str) -> (bool, bool) {
+        let entity = normalize(entity);
+        let as_subject = self.turns.iter().any(|turn| turn.subject == entity);
+        let as_object = self.turns.iter().any(|turn| turn.object == entity);
+        (as_subject, as_object)
+    }
+
+    pub fn contextual_role_flags(
+        &self,
+        entity: &str,
+        current_subject: &str,
+        current_object: &str,
+    ) -> (bool, bool) {
+        let entity = normalize(entity);
+        let current_subject = normalize(current_subject);
+        let current_object = normalize(current_object);
+        let as_subject = self
+            .turns
+            .iter()
+            .any(|turn| turn.subject == entity && turn.object == current_object);
+        let as_object = self
+            .turns
+            .iter()
+            .any(|turn| turn.object == entity && turn.subject == current_subject);
+        (as_subject, as_object)
+    }
+
     pub fn correct_last_entity(&mut self, replacement: &str, rejected: &str) -> Option<String> {
         let replacement = normalize(replacement).trim().to_string();
         let rejected = normalize(rejected).trim().to_string();
@@ -159,6 +186,11 @@ mod tests {
         c.remember("x co gay ra y khong", "x", "y");
         assert_eq!(c.relation_continuity("a", "b"), RelationContinuity::Return);
         assert!(c.relation_seen("a", "b"));
+        assert_eq!(c.role_flags("a"), (true, false));
+        assert_eq!(c.role_flags("b"), (false, true));
+        assert_eq!(c.contextual_role_flags("a", "x", "b"), (true, false));
+        assert_eq!(c.contextual_role_flags("b", "a", "y"), (false, true));
+        assert_eq!(c.contextual_role_flags("a", "x", "y"), (false, false));
 
         for i in 0..20 {
             c.remember(&format!("q{i}"), &format!("s{i}"), &format!("o{i}"));
