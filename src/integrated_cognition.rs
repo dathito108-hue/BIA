@@ -164,7 +164,11 @@ impl IntegratedCognition {
                     } else if entity == query.object.text && entity != query.subject.text {
                         Some(false)
                     } else {
-                        self.pragmatic_entity_role(&entity)
+                        self.pragmatic_entity_role(
+                            &entity,
+                            &query.subject.text,
+                            &query.object.text,
+                        )
                     };
                     let Some(as_subject) = role else {
                         return Some(format!(
@@ -563,21 +567,30 @@ impl IntegratedCognition {
         invalid()
     }
 
-    fn pragmatic_entity_role(&self, entity: &str) -> Option<bool> {
+    fn pragmatic_entity_role(
+        &self,
+        entity: &str,
+        current_subject: &str,
+        current_object: &str,
+    ) -> Option<bool> {
         let entity = normalize(entity).trim().to_string();
-        if entity.is_empty() {
+        let current_subject = normalize(current_subject).trim().to_string();
+        let current_object = normalize(current_object).trim().to_string();
+        if entity.is_empty() || current_subject.is_empty() || current_object.is_empty() {
             return None;
         }
 
-        let (mut as_subject, mut as_object) = self.continuity.role_flags(&entity);
+        let (mut as_subject, mut as_object) = self
+            .continuity
+            .contextual_role_flags(&entity, &current_subject, &current_object);
         let parser = VietnameseSemanticParser;
         for source in self.sources.iter().filter(|s| s.kind != SourceKind::Hypothesis) {
             let scene = parser.parse(&source.text);
             for clause in scene.clauses.iter().take(8) {
-                if clause.subject.text == entity {
+                if clause.subject.text == entity && clause.object.text == current_object {
                     as_subject = true;
                 }
-                if clause.object.text == entity {
+                if clause.object.text == entity && clause.subject.text == current_subject {
                     as_object = true;
                 }
             }
